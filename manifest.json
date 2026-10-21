@@ -1,0 +1,41 @@
+{
+  "id": "crew-fight",
+  "name": {
+    "ru": "Драка человечков",
+    "en": "Crew Fight"
+  },
+  "version": "2.0.0",
+  "author": "aboba",
+  "description": {
+    "ru": "Пиксельный бой двух человечков из звонка Discord (встроенные «Человечки» AngelOS): оружие, комбо, криты, раунды с девушкой с табличкой, комментатор, турнир с сеткой, пьедестал и звуки. Без звонка — демо-бойцы. Лаунчер «fight», ПКМ по рабочему столу, IPC crewfight.",
+    "en": "A pixel boxing match between two people from your Discord call (AngelOS's built-in crew): weapons, combos, crits, rounds with a ring card girl, an announcer, tournament brackets, a podium and sound. Demo fighters without a call. Launcher “fight”, desktop right-click, IPC crewfight."
+  },
+  "icon": "heart",
+  "enabledByDefault": true,
+  "themes": [
+    "pixel",
+    "mac"
+  ],
+  "license": "MIT",
+  "minAngelOSVersion": "6",
+  "requires": {
+    "angelos": ">= release 6 (2004)",
+    "services": ["DiscordVoice", "Config.discord.crew", "Config.discord.crewHidden"],
+    "qt": ["QtMultimedia (sound)", "ShaderEffect .qsb (optional, falls back to Canvas)"]
+  },
+  "main": "Main.qml",
+  "launcher": "Launcher.qml",
+  "settings": "Settings.qml",
+  "menu": [
+    {
+      "label": "Драка человечков / Crew Fight",
+      "icon": "heart",
+      "exec": "qs -c angelos ipc call crewfight pick"
+    },
+    {
+      "label": "Турнир человечков / Crew Tournament",
+      "icon": "heart",
+      "exec": "qs -c angelos ipc call crewfight tour"
+    }
+  ]
+}

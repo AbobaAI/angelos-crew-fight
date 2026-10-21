@@ -1,0 +1,15 @@
+crew-fight sounds — licence record
+==================================
+All files in this folder (*.wav) were synthesised locally with ffmpeg's aevalsrc / anoisesrc
+generators by sounds/gen.sh (sine/noise maths, filters, normalisation). No third-party
+samples, recordings or sound packs are used.
+
+Licence: CC0 1.0 Universal (public domain dedication) —
+https://creativecommons.org/publicdomain/zero/1.0/
+Author: the crew-fight plugin authors, 2026. Rebuild (needs ffmpeg): ./gen.sh
+
+Files: punch slap crack homerun splat feedback boom clack keys thud zap whoosh crit ko
+gong bell cheer sting fanfare swoosh blip crowd
+
+The shader shaders/crowd.frag(.qsb) and all QML code are covered by the plugin's MIT
+licence (../LICENSE).
