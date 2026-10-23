@@ -54,7 +54,7 @@ PanelWindow {
                  "face": side === 0 ? 1 : -1, "st": "enter", "t": 0, "cd": 20, "flash": 0, "trail": [], "coat": g.coat(who.id),
                  "img": who.avatar ? "file://" + who.avatar : "", "hp": 100, "squash": 0, "wep": side === 0 ? g.wa : g.wb,
                  "stun": 0, "mv": null, "noWep": false, "alpha": 1, "low": false, "spin": 0,
-                 "blkAge": 99, "blkCd": 0, "gd": 100, "bflash": 0, "seen": 0, "atkN": 0, "sp": 0, "spd": 0, "mvT": 0 };
+                 "blkAge": 99, "blkCd": 0, "gd": 100, "bflash": 0, "seen": 0, "atkN": 0, "sp": 0, "spd": 0, "mvT": 0, "tgt": null, "fetchT": 0, "bomb": null, "fled": 0 };
     }
     Component.onCompleted: {
         sm = { "f": [mkF(g.a, 0), mkF(g.b, 1)], "mvStat": { "m": 0, "r": 0 }, "parts": [], "floats": [], "proj": [], "beams": [], "rings": [], "shake": 0, "slow": 1, "slowT": 0,
@@ -62,7 +62,8 @@ PanelWindow {
                "roundT": 0, "dmg": [0, 0], "scores": [0, 0], "cardX": -80, "cardHold": 0, "flash": 0, "sayCd": 0, "last": "",
                "combo": 0, "endT": 0, "trX": [112, 788], "rec": null, "maxBeam": 0, "cam": 0, "camX": 450, "camY": 280, "camZ": 1, "punch": 0, "px": 450, "py": 300, "freeze": 0, "sdx": 1, "sdy": 0.3, "vig": 0, "fightT": 0, "maxStall": 0, "pidN": 0,
                "flashC": "#ffffff",
-               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0], "sup": [0, 0], "supHit": [0, 0] } };
+               "items": [], "itemT": 0, "itemN": 0,
+               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0], "sup": [0, 0], "supHit": [0, 0], "pk": { "drop": 0, "heal": 0, "speed": 0, "bomb": 0, "boom": 0, "bombHit": 0, "giveUp": 0 } } };
         for (const f of sm.f)
             if (f.img) { fCv0.loadImage(f.img); fCv1.loadImage(f.img); }
         g.say = tl("Дааамы и господааа! Добро пожаловать на бой года!", "Ladies and gentlemen! Welcome to the fight of the year!");
@@ -267,7 +268,7 @@ PanelWindow {
             "laser": { "n": tl("ОРБИТАЛЬНЫЙ ЛАЗЕР", "ORBITAL LASER"), "nh": 1, "lunge": false, "kb": 2.2, "vy": 12, "fx": "orbital" }
         };
         const s = S[wp.id] || S.fists;
-        return Object.assign({ "id": "super", "k": "super", "t": 34, "sp": true, "fixed": 30, "dm": 1, "w": [s.n + "!"] }, s);
+        return Object.assign({ "id": "super", "k": "super", "t": 34, "sp": true, "fixed": 36, "dm": 1, "w": [s.n + "!"] }, s);
     }
     function superStart(f, mv) {
         f.sp = 0;
@@ -304,6 +305,149 @@ PanelWindow {
         }
         hit(f, e, m2, false);
         if (first) comment(tl("«" + mv.n + "»! Прямо в цель!", "“" + mv.n + "”! Right on target!"), true);
+    }
+    // ── arena pickups: heal kit, speed boost, bomb. They drop from above; fighters walk over to grab them
+    function itemGap() { return g.pickupRate === "rare" ? 330 : g.pickupRate === "often" ? 115 : 190; }
+    function spawnItem(kind) {
+        if (sm.items.length >= 3) return;
+        if (!kind) {
+            const lo = Math.min(sm.f[0].hp, sm.f[1].hp);
+            const wh = lo < 50 ? 0.5 : lo < 80 ? 0.34 : 0.14, ws = 0.34, wb = 0.28;
+            let r = Math.random() * (wh + ws + wb);
+            kind = (r -= wh) < 0 ? "heal" : (r -= ws) < 0 ? "speed" : "bomb";
+        }
+        const used = sm.items.map(q => q.slot); let slot = 0; while (used.indexOf(slot) >= 0) slot++;
+        const pick = () => ropeL + 70 + Math.random() * (ropeR - ropeL - 140);
+        let x = pick();
+        for (let k = 0; k < 8 && !sm.f.every(f => Math.abs(f.x - x) > 80); k++) x = pick();
+        sm.items.push({ "id": ++sm.itemN, "k": kind, "x": x, "y": 320, "vy": 0, "vx": 0, "st": "fall", "t": 0, "life": 330, "fuse": 0, "slot": slot, "thrown": false, "bounced": false });
+        sm.st.pk.drop++;
+        g.sfx("drop", 0.7);
+        snapEv("drop", 900);
+    }
+    function bombNear(f) {
+        for (const it of sm.items) if (it.k === "bomb" && it.st === "fuse" && it.fuse > 8 && Math.abs(f.x - it.x) < 135) return it;
+        return null;
+    }
+    // which item (if any) this fighter decides to walk to: closer than the rival, or badly wanted
+    function pickTarget(f, e) {
+        let best = null, bs = 0;
+        for (const it of sm.items) {
+            if (it.st !== "ready" && !(it.k === "bomb" && it.st === "fuse" && it.fuse > 40 && !it.thrown)) continue;
+            const dm = Math.abs(f.x - it.x), de = Math.abs(e.x - it.x);
+            if (dm > 420) continue;
+            const want = it.k === "heal" ? (f.hp < 45 ? 1 : f.hp < 70 ? 0.75 : 0.3) : it.k === "speed" ? 0.6 : 0.65;
+            if (dm > de * 1.15 + 60 && want < 0.9) continue;
+            const s = want * (1 - dm / 600);
+            if (s > bs) { bs = s; best = it; }
+        }
+        return best && Math.random() < Math.min(1, bs * 1.5 + 0.15) ? best : null;
+    }
+    function collect(f, e, it) {
+        const hx = it.x, hy = fy - 50;
+        if (it.k === "heal") {
+            const H = Math.round(24 * Math.max(0.55, dmgScale));
+            f.hp = Math.min(100, f.hp + H); if (f.hp >= 25) f.low = false;
+            g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp;
+            sm.st.pk.heal++;
+            g.sfx("heal", 0.9);
+            for (let i = 0; i < 30; i++) sm.parts.push({ "x": f.x + (Math.random() - 0.5) * 56, "y": fy - f.y - 10 - Math.random() * 40, "vx": (Math.random() - 0.5) * 1.5, "vy": -1 - Math.random() * 2.6, "g": -0.015, "life": 26 + Math.random() * 14, "c": rnd(["#3ddc84", "#9bffb8", "#ffffff", "#5de6a0"]), "s": 4 });
+            sm.rings.push({ "x": f.x, "y": fy - 6, "r": 8, "life": 16, "c": "#3ddc84" });
+            floatText(f.x, fy - f.y - 140, "+" + H + " HP", "#3ddc84", true);
+            comment(rnd(tl([f.who.name + " хватает аптечку!", "Аптечка! Свежие силы!", f.who.name + " подлатался!"], [f.who.name + " grabs the heal kit!", "A heal kit! Fresh strength!", f.who.name + " patches up!"])));
+            snapEv("heal", 140);
+        } else if (it.k === "speed") {
+            f.spd = 210;
+            sm.st.pk.speed++;
+            g.sfx("boost", 0.9);
+            sparks(f.x, fy - f.y - 50, 16, false, null, ["#ffe066", "#fff2a8", "#6ec3e8"]);
+            sm.rings.push({ "x": f.x, "y": fy - 6, "r": 8, "life": 14, "c": "#ffe066" });
+            floatText(f.x, fy - f.y - 140, tl("УСКОРЕНИЕ!", "SPEED UP!"), "#ffe066", true);
+            comment(rnd(tl([f.who.name + " ускоряется! Не моргай!", "Ускорение! Это уже не бокс, это Формула-1!"], [f.who.name + " speeds up! Don't blink!", "Speed boost! This isn't boxing anymore, it's Formula 1!"])));
+            snapEv("speed", 650);
+        } else {
+            // the bomb: grabbed and lobbed straight at the rival, a fresh short fuse
+            it.st = "fly"; it.thrown = true; it.own = f; it.y = 55; it.t = 0;
+            const tx = Math.max(ropeL + 20, Math.min(ropeR - 20, e.x + e.vx * 6));
+            it.vy = 11; const tl2 = (it.vy + Math.sqrt(it.vy * it.vy + 2 * 1.1 * it.y)) / 1.1;
+            it.vx = (tx - it.x) / tl2; it.x = f.x + f.face * 16;  it.vx = (tx - it.x) / tl2;
+            sm.st.pk.bomb++;
+            g.sfx("whoosh", 0.7);
+            floatText(f.x, fy - f.y - 140, tl("ПОЛУЧАЙ!", "CATCH!"), "#ff8a3d", true);
+            comment(rnd(tl(["Бомба летит! Все в укрытие!", f.who.name + " швыряет бомбу в " + e.who.name + "!"], ["The bomb is flying! Take cover!", f.who.name + " lobs the bomb at " + e.who.name + "!"])));
+            f.cd = Math.max(f.cd, 6);
+        }
+    }
+    function explode(it) {
+        const R = 110;
+        sm.st.pk.boom++;
+        g.sfx("boom", 1); g.sfx("crack", 0.6);
+        sm.flash = Math.max(sm.flash, 5); sm.flashC = "#ffb347"; sm.shake = Math.max(sm.shake, 16); sm.cam = 30; sm.punch = Math.min(0.3, sm.punch + 0.12); sm.px = it.x; sm.py = fy - 40; sm.freeze = Math.max(sm.freeze, 3);
+        sm.rings.push({ "x": it.x, "y": fy - 14, "r": 10, "life": 22, "round": true, "c": "#ffb347" });
+        sm.rings.push({ "x": it.x, "y": fy - 14, "r": 2, "life": 18, "round": true, "c": "#ffffff" });
+        for (let i = 0; i < 46; i++) {
+            const an = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 9;
+            sm.parts.push({ "x": it.x, "y": fy - 14, "vx": Math.cos(an) * sp, "vy": Math.sin(an) * sp - 2, "g": 0.2, "life": 16 + Math.random() * 16, "c": rnd(["#ff8a3d", "#ffd34d", "#ffffff", "#c0392b", "#444444"]), "s": 5 });
+        }
+        floatText(it.x, fy - 120, "BOOM!", "#ffb347", true);
+        snapEv("boom", 170);
+        const dead = [];
+        for (const f of sm.f) {
+            const dx = f.x - it.x, d = Math.abs(dx);
+            if (d > R || f.y > 90 || f.st === "ko") continue;
+            let dmg = Math.round((12 + 12 * (1 - d / R)) * Math.max(0.5, dmgScale));
+            if (g.shieldOn && f.st === "block") {
+                dmg = Math.round(dmg * 0.4); f.gd -= 30; f.bflash = 6; g.sfx("block", 0.8);
+                floatText(f.x, fy - f.y - 130, tl("БЛОК!", "BLOCK!"), "#7fe0ff", false);
+            } else if (!(f.st === "atk" && f.mv && f.mv.k === "super")) {
+                f.st = "hurt"; f.t = 16; f.vx = (dx >= 0 ? 1 : -1) * (6 + 12 * (1 - d / R)); f.vy = 10; f.flash = 5; f.squash = 7; f.stun = 14; f.mv = null; f.noWep = false;
+            }
+            f.hp -= dmg; sm.st.pk.bombHit += dmg; sm.dmg[1 - f.side] += dmg; sm.lastDmg = sm.frame;
+            floatText(f.x, fy - f.y - 100, "−" + dmg, String(cDanger), true);
+            if (f.hp <= 0) dead.push(f);
+        }
+        if (dead.length === 2) { const keep = dead[0].hp > dead[1].hp ? dead[0] : dead[1]; keep.hp = 1; dead.splice(dead.indexOf(keep), 1); }
+        for (const f of sm.f) f.hp = Math.max(0, f.hp);
+        g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp;
+        g.lastHit = "bomb " + sm.st.pk.bombHit;
+        if (dead.length && sm.phase === "fight") finisher(sm.f[1 - dead[0].side], dead[0]);
+        else comment(rnd(tl(["БАБАХ! Зал в восторге!", "Это было громко!"], ["KABOOM! The crowd loves it!", "That was loud!"])));
+    }
+    function stepItems(dt) {
+        if (g.dbgSpawn) { if (sm.phase === "fight") spawnItem(g.dbgSpawn); g.dbgSpawn = ""; }
+        if (sm.phase !== "fight") { if (sm.items.length) sm.items = []; return; }
+        if (g.pickupsOn) { sm.itemT -= dt; if (sm.itemT <= 0) { spawnItem(); sm.itemT = itemGap() * (0.7 + Math.random() * 0.6); } }
+        if (!sm.items.length) return;
+        const keep = [];
+        for (const it of sm.items) {
+            it.t += dt;
+            if (it.st === "fall" || it.st === "fly") {
+                it.vy -= 1.1 * dt; it.y += it.vy * dt; it.x += it.vx * dt;
+                if (it.y <= 0 && it.vy < 0) {
+                    it.y = 0;
+                    if (it.st === "fall" && it.vy < -6 && !it.bounced) { it.vy = -it.vy * 0.3; it.bounced = true; it.y = 0.01; dust(it.x, 5); }
+                    else { it.vy = 0; it.vx = 0; dust(it.x, 5); it.t = 0; if (it.st === "fly") { it.st = "fuse"; it.fuse = 36; g.sfx("fuse", 0.8); } else it.st = "ready"; }
+                }
+            } else if (it.st === "ready") {
+                it.life -= dt;
+                if (it.life <= 0) { sparks(it.x, fy - 20, 8, false, null, ["#ffffff"]); continue; }
+                if (it.k === "bomb" && it.t > 105) { it.st = "fuse"; it.fuse = 70; g.sfx("fuse", 0.8); snapEv("fuse", 500); }
+            } else if (it.st === "fuse") {
+                it.fuse -= dt;
+                if (it.fuse <= 0) { explode(it); continue; }
+            }
+            if (sm.phase === "fight" && (it.st === "ready" || (it.k === "bomb" && it.st === "fuse" && it.fuse > 28 && !it.thrown))) {
+                let got = null;
+                for (const f of (Math.random() < 0.5 ? [sm.f[0], sm.f[1]] : [sm.f[1], sm.f[0]]))
+                    if (Math.abs(f.x - it.x) < 28 && f.y < 40 && (f.st === "idle" || f.st === "dash" || f.st === "fetch" || f.st === "block" || f.st === "atk" || f.st === "jatk" || f.st === "flee")) { got = f; break; }
+                if (got) { collect(got, sm.f[1 - got.side], it); if (it.k !== "bomb") continue; }
+            }
+            keep.push(it);
+        }
+        sm.items = keep;
+        for (const f of sm.f)
+            if (f.spd > 0 && Math.abs(f.vx) > 2 && Math.random() < 0.6)
+                sm.parts.push({ "x": f.x - Math.sign(f.vx) * 12, "y": fy - f.y - 8 - Math.random() * 62, "vx": -f.vx * 0.15, "vy": 0, "g": 0, "life": 9, "c": rnd(["#ffe066", "#fff2a8", "#6ec3e8"]), "s": 4 });
     }
     function finisher(att, def) {
         const fin = att.wep.fin;
@@ -378,7 +522,7 @@ PanelWindow {
             f.y += f.vy * dt;
             if (f.y <= 0) { if (f.vy < -7) { dust(f.x, 8); f.squash = 6; } f.y = 0; f.vy = 0; }
         }
-        if (f.y === 0 && f.st !== "dash" && f.st !== "walk") f.vx *= Math.pow(0.8, dt);
+        if (f.y === 0 && f.st !== "dash" && f.st !== "walk" && f.st !== "fetch" && f.st !== "flee") f.vx *= Math.pow(0.8, dt);
         if (f.st !== "enter") {
             if (f.x < ropeL) { f.x = ropeL; if (Math.abs(f.vx) > 3) { sm.ropeW[0] = Math.min(14, Math.abs(f.vx)); f.vx = Math.abs(f.vx) * 0.75; } else f.vx = 0; }
             if (f.x > ropeR) { f.x = ropeR; if (Math.abs(f.vx) > 3) { sm.ropeW[1] = Math.min(14, Math.abs(f.vx)); f.vx = -Math.abs(f.vx) * 0.75; } else f.vx = 0; }
@@ -386,9 +530,10 @@ PanelWindow {
         if (f.squash > 0) f.squash -= dt;
         if (f.flash > 0) f.flash -= dt;
         if (f.bflash > 0) f.bflash -= dt;
+        if (f.spd > 0) f.spd -= dt;
         if (f.blkCd > 0) f.blkCd -= dt;
         if (f.st !== "block" && f.gd < 100) f.gd = Math.min(100, f.gd + 0.8 * dt);
-        if (f.st === "dash" || Math.abs(f.vx) > 8) { f.trail.unshift({ "x": f.x, "y": f.y }); if (f.trail.length > 4) f.trail.pop(); }
+        if (f.st === "dash" || Math.abs(f.vx) > 8 || (f.spd > 0 && Math.abs(f.vx) > 2)) { f.trail.unshift({ "x": f.x, "y": f.y }); if (f.trail.length > (f.spd > 0 ? 6 : 4)) f.trail.pop(); }
         else if (f.trail.length) f.trail.pop();
     }
     function brain(f, e, dt) {
@@ -400,11 +545,13 @@ PanelWindow {
         switch (f.st) {
         case "idle": {
             f.cd -= dt;
+            if (sm.items.length) { const bb = bombNear(f); if (bb && f.fled !== bb.id) { f.fled = bb.id; if (Math.random() < 0.85) { f.st = "flee"; f.bomb = bb; break; } } }
             if (g.shieldOn && tryBlock(f, e, dist, dt)) break;
             if (g.superOn && f.sp >= 100 && f.cd <= 0 && !f.noWep) {
                 const smv = f.superMv || (f.superMv = superOf(wp));
                 if ((!smv.lunge || dist < 430) && Math.random() < 0.5) { startMove(f, smv); break; }
             }
+            if (f.cd <= 0 && sm.items.length) { const it = pickTarget(f, e); if (it) { f.st = "fetch"; f.tgt = it; f.fetchT = 0; break; } }
             const mr = Math.min(wp.range, 104);                     // melee reach (mic/laser too: bonk / butt bash)
             if (f.cd > 0) { if (dist > mr + 40 && Math.random() < 0.04 * dt) f.st = "dash"; break; }
             const stall = sm.frame - (sm.lastDmg || 0) > 90;
@@ -431,8 +578,27 @@ PanelWindow {
             f.blkAge += dt;
             if (f.t <= 0) { f.st = "idle"; f.cd = 3 + Math.random() * 6; f.blkCd = 34 + Math.random() * 30; }
             break;
+        case "fetch": {
+            const it = f.tgt;
+            if (!it || sm.items.indexOf(it) < 0 || (it.st !== "ready" && !(it.k === "bomb" && it.st === "fuse" && it.fuse > 28 && !it.thrown))) { f.st = "idle"; f.cd = 2; break; }
+            f.fetchT += dt;
+            const d = it.x - f.x;
+            f.face = d >= 0 ? 1 : -1;
+            f.vx = f.face * (f.spd > 0 ? 10 : 7);
+            if (Math.abs(d) < 12) { f.st = "idle"; f.cd = 2; }
+            else if (f.fetchT > 130) { f.st = "idle"; f.cd = 4; sm.st.pk.giveUp++; }
+            break;
+        }
+        case "flee": {
+            const b = f.bomb;
+            if (!b || b.st !== "fuse" || Math.abs(f.x - b.x) > 150) { f.st = "idle"; f.cd = 3; break; }
+            const away = f.x >= b.x ? 1 : -1;
+            f.vx = away * (f.spd > 0 ? 13 : 10);
+            if (f.y === 0 && ((away > 0 && f.x > ropeR - 14) || (away < 0 && f.x < ropeL + 14))) { f.vy = 14; f.vx = -away * 9; }    // cornered: jump over the bomb
+            break;
+        }
         case "dash":
-            f.vx = f.face * 9;
+            f.vx = f.face * (f.spd > 0 ? 14 : 9);
             if (dist <= Math.min(70, Math.min(wp.range, 104) - 24) || (f.forced && dist <= Math.min(wp.range, 104) - 20)) { f.forced = false; f.st = "idle"; f.cd = 3 + Math.random() * 6; dust(f.x - f.face * 20, 3); }
             break;
         case "atk":
@@ -502,14 +668,14 @@ PanelWindow {
             else sm.cardX += 7 * dt;
             for (const f of sm.f) physics(f, dt);
             if (sm.cardX > 700) {
-                sm.phase = "fight"; sm.phT = 0; sm.roundT = roundFr; g.banner = "FIGHT!"; g.sfx("bell", 0.8); sm.lastDmg = sm.frame;
+                sm.phase = "fight"; sm.phT = 0; sm.roundT = roundFr; sm.itemT = itemGap() * 0.55; g.banner = "FIGHT!"; g.sfx("bell", 0.8); sm.lastDmg = sm.frame;
                 for (const f of sm.f) { f.st = "idle"; f.cd = 10 + Math.random() * 15; }
             }
         } else if (sm.phase === "fight") {
             if (sm.phT > 30 && g.banner === "FIGHT!") g.banner = "";
             sm.roundT -= dt;
             sm.fightT += dt; sm.maxStall = Math.max(sm.maxStall, sm.frame - (sm.lastDmg || 0));
-            brain(A, B, dt); brain(B, A, dt);
+            brain(A, B, dt * (A.spd > 0 ? 1.35 : 1)); brain(B, A, dt * (B.spd > 0 ? 1.35 : 1));
             for (const f of sm.f) { f.mvT = (f.st === "dash" || f.st === "fetch") ? f.mvT + dt : 0; if (f.mvT > sm.st.maxMv) sm.st.maxMv = f.mvT; }
             for (const f of sm.f) physics(f, dt);
             const d = B.x - A.x;
@@ -588,7 +754,9 @@ PanelWindow {
     function step(dt) {
         sm.dt = dt;
         sm.frame += dt;
+        if (g.dbgCharge) { g.dbgCharge = false; for (const f of sm.f) f.sp = 100; }
         stepRoundFlow(dt);
+        stepItems(dt);
         g.phase = sm.phase;
         { const q0 = sm.f[0], q1 = sm.f[1]; g.spA = Math.round(q0.sp); g.spB = Math.round(q1.sp); g.sdA = q0.blkCd <= 0 && q0.gd >= 30; g.sdB = q1.blkCd <= 0 && q1.gd >= 30; }
         const sec = Math.max(0, Math.ceil(sm.roundT / 30));
@@ -708,7 +876,7 @@ PanelWindow {
             + "|" + (st === "ko" ? (f.y === 0 && Math.abs(f.vx) < 2 ? "L" : Math.round(fr % 40)) : "") + "|" + (st === "jatk" ? (f.vy > 0 ? 1 : 0) + ":" + (f.vy < 0 ? 1 : 0) : "")
             + "|" + (f.stun > 0 ? Math.round(fr * 2) : "") + "|" + (f.x % 1 >= 0.5 ? 1 : 0) + (f.y % 1 >= 0.5 ? 1 : 0) + "|" + f.wep.id + "|" + (f.st === "win" ? Math.round(fr) : "")
             + "|" + (st === "block" ? Math.floor(fr / 3) % 2 : "") + (f.bflash > 0 ? "b" + Math.floor(f.bflash) : "")
-            + "|" + (g.superOn && f.sp >= 100 ? Math.floor(fr / 5) % 2 : "");
+            + "|" + (g.superOn && f.sp >= 100 ? Math.floor(fr / 5) % 2 : "") + "|" + (f.spd > 0 ? Math.floor(fr / 3) % 2 : "");
     }
     function paintLayers() {
         const s = sm, fr = s.frame;
@@ -721,6 +889,17 @@ PanelWindow {
             cv.x = Math.round(f.x) - 160; cv.y = Math.round(fy - f.y) - 250;
             const k = fKey(f, fr);
             if (k !== cv.key) { cv.key = k; cv.requestPaint(); }
+        }
+        for (let i = 0; i < 3; i++) {
+            const it = s.items.find(q => q.slot === i), cv = itemRep.itemAt(i);
+            if (!cv) continue;
+            if (!it) { cv.visible = false; continue; }
+            const bob = it.st === "ready" && it.k !== "bomb" ? 3 + Math.sin(fr / 6) * 3 : 0;
+            cv.x = Math.round(it.x) - 130; cv.y = Math.round(fy - it.y - bob) - 84;
+            const fl = it.st === "ready" && it.life < 90 ? Math.floor(fr / 3) % 2 : 0;
+            cv.visible = !fl;
+            const key = it.k + "|" + it.st + "|" + (it.st === "fuse" ? Math.floor(it.fuse / (it.fuse > 30 ? 6 : 3)) % 2 : "") + "|" + (it.st === "fly" ? Math.floor(fr / 2) % 4 : "");
+            if (key !== cv.key) { cv.key = key; cv.requestPaint(); }
         }
         const wob = Math.abs(s.ropeW[0]) + Math.abs(s.ropeW[1]) > 0.05;
         upd(ropeBack, wob); upd(ropeFront, wob);
@@ -958,6 +1137,24 @@ PanelWindow {
             }
             onImageLoaded: { key = ""; requestPaint(); }
         }
+        // pickups: three sprite slots, positioned on the GPU, repainted only when their look changes
+        Repeater {
+            id: itemRep
+            model: 3
+            Canvas {
+                id: icv
+                required property int index
+                property string key: ""
+                width: 260; height: 100; visible: false
+                smooth: false
+                renderStrategy: Canvas.Threaded
+                onPaint: {
+                    const ctx = getContext("2d"); ctx.reset(); const sm = ar.sm; if (!sm) return;
+                    const it = sm.items.find(q => q.slot === index);
+                    if (it) canvas.drawItem(ctx, it, sm.frame);
+                }
+            }
+        }
         FCv { id: fCv0; idx: 0 }
         FCv { id: fCv1; idx: 1 }
         Lyr {
@@ -1056,6 +1253,7 @@ PanelWindow {
                 else if (f.st === "ko" || f.st === "jatk") { ctx.translate(f.x, by + h / 2); ctx.rotate((f.st === "ko" ? -1 : 1) * f.face * Math.min(1.2, (sm.frame % 40) / 12)); ctx.translate(-f.x, -(by + h / 2)); }
                 const ga = ctx.globalAlpha;
                 ctx.globalAlpha = ga * 0.25; px(ctx, "#000000", f.x - 22 + f.y / 8, fy - 4, Math.max(4, 44 - f.y / 4), 4); ctx.globalAlpha = ga;
+                if (f.spd > 0 && f.st !== "ko") for (let k = 0; k < 3; k++) { ctx.globalAlpha = 0.7 - k * 0.15; px(ctx, k % 2 ? "#6ec3e8" : "#ffe066", f.x - f.face * (28 + k * 10 + (Math.floor(sm.frame / 3) % 2) * 6), fy - f.y - 18 - k * 20, 22, 3); } ctx.globalAlpha = ga;
                 if (ar.g.superOn && f.st !== "ko" && (f.sp >= 100 || (f.st === "atk" && f.mv && f.mv.k === "super" && f.t > 12))) drawSuperAura(ctx, f);
                 if (sitting) { px(ctx, "#8a5a2b", f.x - 22, fy - 22, 44, 6); px(ctx, "#5a3a1b", f.x - 20, fy - 16, 5, 16); px(ctx, "#5a3a1b", f.x + 15, fy - 16, 5, 16); }
                 const walk = ((f.st === "dash" || f.st === "walk") && Math.floor(sm.frame / 3) % 2) ? p : 0;
@@ -1103,6 +1301,38 @@ PanelWindow {
                 if (f.st === "ko") { ctx.fillStyle = "#e04848"; ctx.font = "bold 16px \"" + Theme.fontTitle + "\""; ctx.textAlign = "center"; ctx.fillText("x_x", f.x, hy + hs / 2 + 6); }
                 if (f.st === "block") drawShield(ctx, f, front, arm, by, h, p);
                 ctx.restore();
+            }
+            // pickup sprite: drawn about (130, 84) = the spot on the floor under it
+            function drawItem(ctx, it, fr) {
+                const ox = 130, oy = 84, DK = dk;
+                const lit = it.st === "fuse" && Math.floor(it.fuse / (it.fuse > 30 ? 6 : 3)) % 2 === 0;
+                ctx.globalAlpha = 0.25; px(ctx, "#000000", ox - 14, oy - 3, 28, 4); ctx.globalAlpha = 1;
+                if (it.k === "heal") {
+                    ctx.globalAlpha = 0.22; ctx.fillStyle = "#3ddc84"; ctx.beginPath(); ctx.ellipse(ox - 26, oy - 52, 52, 48); ctx.fill(); ctx.globalAlpha = 1;
+                    px(ctx, DK, ox - 15, oy - 42, 30, 28); px(ctx, "#f4f4f8", ox - 13, oy - 40, 26, 24); px(ctx, "#d6d6e0", ox - 13, oy - 20, 26, 4);
+                    px(ctx, "#3ddc84", ox - 3, oy - 37, 6, 18); px(ctx, "#3ddc84", ox - 9, oy - 31, 18, 6);
+                    px(ctx, DK, ox - 8, oy - 46, 16, 4);
+                } else if (it.k === "speed") {
+                    ctx.globalAlpha = 0.22; ctx.fillStyle = "#ffe066"; ctx.beginPath(); ctx.ellipse(ox - 26, oy - 52, 52, 48); ctx.fill(); ctx.globalAlpha = 1;
+                    px(ctx, DK, ox - 15, oy - 42, 30, 30); px(ctx, "#2f4fbf", ox - 13, oy - 40, 26, 26);
+                    const bolt = [[4, -38], [-4, -28], [1, -28], [-5, -16], [7, -30], [1, -30]];
+                    ctx.fillStyle = "#ffe066"; ctx.beginPath(); ctx.moveTo(ox + bolt[0][0], oy + bolt[0][1]); for (let k = 1; k < bolt.length; k++) ctx.lineTo(ox + bolt[k][0], oy + bolt[k][1]); ctx.closePath(); ctx.fill();
+                    px(ctx, "#ffffff", ox - 12, oy - 39, 4, 4);
+                } else {
+                    if (it.st === "fuse") {   // blast radius warning on the floor
+                        ctx.globalAlpha = lit ? 0.5 : 0.2; ctx.strokeStyle = "#ff4f6d"; ctx.lineWidth = 3;
+                        ctx.beginPath(); ctx.ellipse(ox - 110, oy - 12, 220, 22); ctx.stroke();
+                        ctx.fillStyle = "#ff4f6d"; ctx.globalAlpha = lit ? 0.16 : 0.06; ctx.beginPath(); ctx.ellipse(ox - 110, oy - 12, 220, 22); ctx.fill(); ctx.globalAlpha = 1;
+                    }
+                    const body = lit ? "#c0392b" : "#1a1a20";
+                    ctx.fillStyle = DK; ctx.beginPath(); ctx.ellipse(ox - 17, oy - 38, 34, 34); ctx.fill();
+                    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(ox - 15, oy - 36, 30, 30); ctx.fill();
+                    px(ctx, lit ? "#ff8a7a" : "#5a5a6a", ox - 9, oy - 31, 6, 6);
+                    px(ctx, "#8a5a2b", ox - 2, oy - 46, 4, 8); px(ctx, "#8a5a2b", ox + 2, oy - 50, 4, 4);
+                    const sp = (Math.floor(fr / 2) % 2) || it.st === "fuse";
+                    if (sp) { px(ctx, "#ffd34d", ox + 4, oy - 56, 6, 6); px(ctx, "#ff8a3d", ox + 2, oy - 58, 2, 2); px(ctx, "#ffffff", ox + 7, oy - 59, 2, 2); }
+                    if (it.st === "fuse" && it.fuse < 40) { ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px \"" + Theme.fontTitle + "\""; ctx.textAlign = "center"; ctx.fillText("!", ox, oy - 62); }
+                }
             }
             // super ready / charging: a pulsing golden glow behind the body and a ring on the floor
             function drawSuperAura(ctx, f) {

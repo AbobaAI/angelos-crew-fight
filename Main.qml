@@ -56,6 +56,8 @@ Item {
     readonly property bool superOn: cfg("gpSuper", true) !== false
     readonly property bool pickupsOn: cfg("gpPickups", true) !== false
     readonly property string pickupRate: ["rare", "normal", "often"].indexOf(String(cfg("gpPickupRate", "normal"))) >= 0 ? String(cfg("gpPickupRate", "normal")) : "normal"
+    property bool dbgCharge: false
+    property string dbgSpawn: ""
     property string snapEv: ""            // test helper: save the arena (not the screen) as a PNG when these events fire
     property string snapDir: ""
     property int turbo: 1                 // test helper: N simulation steps per tick, no sound
@@ -511,6 +513,8 @@ Item {
         function pickupRate(v: string): string { const r = v === "rare" || v === "often" ? v : "normal"; root.setCfg("gpPickupRate", r); return "pickup rate " + r; }
         function gameplay(v: string): string { const o = v !== "off" && v !== "0"; root.setCfg("gpShield", o); root.setCfg("gpSuper", o); root.setCfg("gpPickups", o); return "shield+super+pickups " + (o ? "on" : "off"); }
         // test helpers (not in the README): turbo N = N sim steps per tick, silent
+        function charge(): string { root.dbgCharge = true; return "super meters filled"; }
+        function spawn(kind: string): string { root.dbgSpawn = kind || "heal"; return "spawn " + kind; }
         function snap(ev: string, dir: string): string { root.snapEv = ev; root.snapDir = dir; return "snap " + ev + " -> " + dir; }
         function turbo(n: string): string { root.turbo = Math.max(1, Math.min(60, parseInt(n) || 1)); return "turbo " + root.turbo; }
         // sound: on | off | toggle ; volume: 0-100 (persisted)
