@@ -61,7 +61,8 @@ PanelWindow {
                "zoom": 1, "zx": 450, "zy": fy - 60, "ropeW": [0, 0], "hype": 0, "frame": 0, "phase": "intro", "phT": 0, "round": 0,
                "roundT": 0, "dmg": [0, 0], "scores": [0, 0], "cardX": -80, "cardHold": 0, "flash": 0, "sayCd": 0, "last": "",
                "combo": 0, "endT": 0, "trX": [112, 788], "rec": null, "maxBeam": 0, "cam": 0, "camX": 450, "camY": 280, "camZ": 1, "punch": 0, "px": 450, "py": 300, "freeze": 0, "sdx": 1, "sdy": 0.3, "vig": 0, "fightT": 0, "maxStall": 0, "pidN": 0,
-               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0] } };
+               "flashC": "#ffffff",
+               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0], "sup": [0, 0], "supHit": [0, 0] } };
         for (const f of sm.f)
             if (f.img) { fCv0.loadImage(f.img); fCv1.loadImage(f.img); }
         g.say = tl("Дааамы и господааа! Добро пожаловать на бой года!", "Ladies and gentlemen! Welcome to the fight of the year!");
@@ -119,28 +120,33 @@ PanelWindow {
         mv = mv || {};
         const wp = att.wep;
         const hx = (att.x + def.x) / 2, hy = fy - def.y - 60;
-        if (Math.random() < 0.1) {
+        if (!mv.sp && Math.random() < 0.1) {
             floatText(hx, hy - 20, tl("мимо!", "miss!"), String(cText), false);
             g.sfx("whoosh", 0.5);
             sm.last = ""; sm.combo = 0; g.combo = 0;
             return;
         }
-        const crit = Math.random() < wp.crit * (mv.cm || 1);
+        const crit = !mv.sp && Math.random() < wp.crit * (mv.cm || 1);
         const hits = wp.hits && !mv.dm ? wp.hits[0] + Math.floor(Math.random() * (wp.hits[1] - wp.hits[0] + 1)) : 1;
         let dmg = 0;
         for (let i = 0; i < hits; i++) dmg += wp.dmg[0] + Math.random() * (wp.dmg[1] - wp.dmg[0] + 1);
-        dmg = dmg * (mv.dm || 1) + (jump ? 4 : 0);
+        if (mv.fixed) dmg = mv.fixed * (0.88 + Math.random() * 0.27);          // supers: a fixed share of the bar, whatever the weapon
+        else dmg = dmg * (mv.dm || 1) + (jump ? 4 : 0);
         if (crit) dmg *= (wp.critMul || 2);
         dmg = Math.max(1, Math.round(dmg * dmgScale * (g.rounds === 0 ? 1 + 0.5 * (sm.round - 1) : 1)));
         if (g.shieldOn && def.st === "block") { blocked(att, def, dmg, crit, mv, wp, hx, hy); return; }
         sm.st.hits[att.side]++;
+        if (mv.sp) sm.st.supHit[att.side] += dmg;
+        else { const dm = Math.min(1.3, mv.dm || 1); addSp(att, 6 + 7 * dm); addSp(def, 5 + 5 * dm); }
         def.hp = Math.max(0, def.hp - dmg);
         hitSound(wp, mv, crit);
         sm.dmg[att.side] += dmg;
         sm.lastDmg = sm.frame;
         def.vx = att.face * (crit ? 15 : 8) * wp.kb * (mv.kb || 1);
         def.vy = mv.vy || (crit ? 8 : 4);
-        if (def.st !== "ko") { def.st = "hurt"; def.t = crit ? 16 : 10; }
+        const armor = def.st === "atk" && def.mv && def.mv.k === "super";          // a charging super can't be interrupted
+        if (armor) def.vx *= 0.2;
+        else if (def.st !== "ko") { def.st = "hurt"; def.t = crit ? 16 : 10; }
         def.flash = 5;
         def.squash = 7;
         att.vx = -att.face * 2;
@@ -158,7 +164,7 @@ PanelWindow {
         sparks(hx, hy, crit ? 22 : 9, crit, wp);
         sm.shake = Math.max(sm.shake, (crit ? 12 : 4) + (mv.shake || 0));
         sm.hype = Math.min(1, sm.hype + (crit ? 0.6 : 0.25));
-        if ((mv.stun || wp.stun) && Math.random() < (mv.stun || wp.stun)) {
+        if (!armor && (mv.stun || wp.stun) && Math.random() < (mv.stun || wp.stun)) {
             def.stun = 34; floatText(hx, hy - 64, tl("оглушён(а)!", "stunned!"), "#6ec3e8", false);
             comment(rnd(tl([def.who.name + " видит звёзды и пинг 999!", "Оглушение! Кто-нибудь, дайте ему нашатырь!", def.who.name + " временно AFK!"], [def.who.name + " sees stars and ping 999!", "Stunned! Somebody get the smelling salts!", def.who.name + " is temporarily AFK!"])));
         }
@@ -187,6 +193,7 @@ PanelWindow {
         att.vx = -att.face * (perfect ? 7 : 3);
         def.gd -= sup ? 120 : 14 + dmg * 0.8;
         sm.st.blk[def.side]++;
+        if (sup) sm.st.supHit[att.side] += d; else { addSp(def, perfect ? 12 : 5); addSp(att, 3); }
         g.sfx(perfect ? "parry" : "block", 0.9);
         g.sfx(hitSfx[wp.id] || "punch", 0.25);
         sm.freeze = Math.max(sm.freeze, perfect ? 4 : 2);
@@ -236,6 +243,68 @@ PanelWindow {
         f.st = "block"; f.t = 14 + Math.random() * 4; f.blkAge = 0; f.gd -= 8; f.vx = 0;
         return true;
     }
+    // ── super move: the meter fills from hits dealt/taken; when full the fighter fires a flashy, unstoppable (but guard-breakable) weapon move
+    function addSp(f, n) {
+        if (!g.superOn || f.st === "ko") return;
+        const was = f.sp;
+        f.sp = Math.min(100, f.sp + n);
+        if (was < 100 && f.sp >= 100) {
+            floatText(f.x, fy - f.y - 165, tl("СУПЕР ГОТОВ!", "SUPER READY!"), "#ffd34d", true);
+            g.sfx("sting", 0.45);
+            for (let i = 0; i < 16; i++) sm.parts.push({ "x": f.x + (Math.random() - 0.5) * 50, "y": fy - f.y - 20 - Math.random() * 90, "vx": (Math.random() - 0.5) * 2, "vy": -1 - Math.random() * 3, "g": 0.02, "life": 24, "c": rnd(["#ffd34d", "#fff2a8", "#ffffff"]), "s": 4 });
+        }
+    }
+    // weapon-specific supers: n = name, nh = hits, lunge = dash to the target first, fx = extra effect
+    function superOf(wp) {
+        const S = {
+            "fists": { "n": tl("МЕГА-ХУК", "MEGA HOOK"), "nh": 1, "lunge": true, "kb": 2.6, "vy": 15, "fx": "stars" },
+            "slipper": { "n": tl("ТАПОЧНЫЙ АРМАГЕДДОН", "SLIPPER ARMAGEDDON"), "nh": 5, "lunge": true, "kb": 0.5, "fx": "stars" },
+            "bat": { "n": tl("ГРАНД-СЛЭМ", "GRAND SLAM"), "nh": 1, "lunge": true, "kb": 3.4, "vy": 16, "fx": "stars" },
+            "fish": { "n": tl("РЫБНОЕ ЦУНАМИ", "FISH TSUNAMI"), "nh": 1, "lunge": false, "kb": 2.4, "vy": 12, "fx": "tsunami" },
+            "mic": { "n": tl("ЗВУКОВОЙ УДАР", "SONIC BOOM"), "nh": 1, "lunge": false, "kb": 2.8, "vy": 10, "fx": "sonic" },
+            "keyboard": { "n": tl("СИНИЙ ЭКРАН СМЕРТИ", "BLUE SCREEN OF DEATH"), "nh": 3, "lunge": true, "kb": 1.2, "fx": "bsod" },
+            "bread": { "n": tl("ХЛЕБНЫЙ ПИР", "BREAD FEAST"), "nh": 2, "lunge": true, "kb": 1.6, "fx": "feast" },
+            "laser": { "n": tl("ОРБИТАЛЬНЫЙ ЛАЗЕР", "ORBITAL LASER"), "nh": 1, "lunge": false, "kb": 2.2, "vy": 12, "fx": "orbital" }
+        };
+        const s = S[wp.id] || S.fists;
+        return Object.assign({ "id": "super", "k": "super", "t": 34, "sp": true, "fixed": 30, "dm": 1, "w": [s.n + "!"] }, s);
+    }
+    function superStart(f, mv) {
+        f.sp = 0;
+        sm.st.sup[f.side]++;
+        g.sfx("supercharge", 1);
+        sm.vig = 1; sm.cam = 36; sm.punch = Math.max(sm.punch, 0.1); sm.px = f.x; sm.py = fy - 90; sm.scan = 14;
+        floatText(f.x, fy - f.y - 175, mv.n + "!", "#ffd34d", true, 0, -0.4);
+        comment(rnd(tl([f.who.name + ": СУПЕРУДАР «" + mv.n + "»!", "Зал замер! Сейчас будет больно!", f.who.name + " заряжает что-то ужасное!"], [f.who.name + ": SUPER MOVE “" + mv.n + "”!", "The hall goes silent! This will hurt!", f.who.name + " is charging something terrible!"])), true);
+        snapEv("supercharge", 330);
+    }
+    function superStrike(f, e, i, mv) {
+        const first = i === 0;
+        if (first && mv.lunge) {
+            const nx = Math.max(ropeL, Math.min(ropeR, e.x - f.face * 56));
+            for (let k = 0; k < 7; k++) f.trail.unshift({ "x": f.x + (nx - f.x) * k / 7, "y": f.y });
+            if (f.trail.length > 4) f.trail.length = 4;
+            dust(f.x, 6); f.x = nx; dust(nx, 8); f.vx = 0;
+        }
+        const m2 = { "id": "super", "sp": true, "fixed": mv.fixed / mv.nh, "kb": i === mv.nh - 1 ? mv.kb : 0.3, "vy": i === mv.nh - 1 ? mv.vy : 3, "w": mv.w, "shake": 10, "dm": 1 };
+        sm.flash = Math.max(sm.flash, first ? 7 : 3);
+        sm.flashC = mv.fx === "bsod" ? "#2f6bff" : mv.fx === "orbital" ? "#ff4f6d" : mv.fx === "tsunami" ? "#6ec3e8" : "#fff2a8";
+        sm.shake = Math.max(sm.shake, 12); sm.cam = 40; sm.punch = Math.min(0.3, sm.punch + 0.1); sm.scan = 8;
+        if (first) {
+            g.sfx("super", 1); g.sfx("cheer", 0.6);
+            snapEv("super", 190);
+        }
+        switch (mv.fx) {
+        case "tsunami": splash(e.x, fy - 90); splash(e.x - 30, fy - 60); splash(e.x + 30, fy - 60); sm.rings.push({ "x": e.x, "y": fy - 4, "r": 10, "life": 26 }); break;
+        case "sonic": for (const r0 of [8, 30, 56]) sm.rings.push({ "x": f.x + f.face * 40, "y": fy - 80, "r": r0, "life": 24, "round": true, "c": "#ffffff" }); sm.beams.push({ "x1": f.x + f.face * 30, "x2": e.x, "y": fy - f.y - 80, "life": 8, "w": 36 }); break;
+        case "orbital": sm.beams.push({ "x1": e.x, "x2": e.x + (f.face > 0 ? 60 : -60), "y": fy - 150, "life": 12, "w": 20 }); sm.beams.push({ "x1": f.x + f.face * 40, "x2": e.x, "y": fy - f.y - 80, "life": 12, "w": 42 }); sm.maxBeam = 10; break;
+        case "bsod": for (let k = 0; k < 5; k++) floatText(e.x + (Math.random() - 0.5) * 80, fy - 100 - Math.random() * 40, rnd([":(", "0x0000007B", "FATAL", "Ctrl+Alt+Del", "STOP"]), "#ffffff", false, (Math.random() - 0.5) * 4, -2); break;
+        case "feast": sparks(f.x + f.face * 30, fy - f.y - 70, 24, true, null, ["#e0b060", "#8a5a2b"]); if (first) { f.hp = Math.min(100, f.hp + 8); g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp; floatText(f.x, fy - f.y - 140, "+8 " + tl("*хрум*", "*crunch*"), String(cOk), false); } break;
+        default: for (let k = 0; k < 6; k++) floatText(e.x, fy - 120, "★", "#ffe066", true, (Math.random() - 0.5) * 6, -2 - Math.random() * 2);
+        }
+        hit(f, e, m2, false);
+        if (first) comment(tl("«" + mv.n + "»! Прямо в цель!", "“" + mv.n + "”! Right on target!"), true);
+    }
     function finisher(att, def) {
         const fin = att.wep.fin;
         def.st = "ko"; def.vx = att.face * 20; def.vy = 13;
@@ -266,7 +335,8 @@ PanelWindow {
         else if (k === "spray") g.sfx("keys", 0.7);
         else if (k === "wave") g.sfx("feedback", mv.big ? 0.6 : 0.35);
         else if (k === "beam" || k === "eyeblast") g.sfx("zap", 0.5);
-        floatText(f.x, fy - f.y - 140, "«" + mv.n + "»", String(cAccent2), false, 0, -0.6);
+        if (k !== "super") floatText(f.x, fy - f.y - 140, "«" + mv.n + "»", String(cAccent2), false, 0, -0.6);
+        if (k === "super") superStart(f, mv);
         if (mv.k === "homerun" && Math.random() < 0.5) comment(f.who.name + tl(" замахивается на хоумран!", " winds up for a home run!"));
     }
     function moveTick(f, e, dist) {
@@ -286,6 +356,13 @@ PanelWindow {
             break;
         case "eyeblast":
             if (at(6)) { const y = fy - f.y - 64 - 30; sm.beams.push({ "x1": f.x + f.face * 10, "x2": e.x, "y": y - 6, "life": 7, "w": 6 }); sm.beams.push({ "x1": f.x + f.face * 10, "x2": e.x, "y": y + 6, "life": 7, "w": 6 }); if (dist < 330) hit(f, e, mv, false); }
+            break;
+        case "super":
+            if (t > 12) {
+                sm.vig = Math.max(sm.vig, 0.7);
+                if (Math.floor(t * 2) % 2 === 0) for (let i = 0; i < 3; i++) { const an = Math.random() * 6.3; sm.parts.push({ "x": f.x + Math.cos(an) * 58, "y": fy - f.y - 60 + Math.sin(an) * 58, "vx": -Math.cos(an) * 3.6, "vy": -Math.sin(an) * 3.6, "g": 0, "life": 15, "c": rnd(["#ffd34d", "#fff2a8", "#ffffff", String(cAccent2)]), "s": 4 }); }
+            }
+            for (let i = 0; i < mv.nh; i++) if (at(12 - i * 3)) superStrike(f, e, i, mv);
             break;
         case "eat":
             if (at(8)) { f.hp = Math.min(100, f.hp + 7); g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp; floatText(f.x, fy - 140, tl("+7 *хрум*", "+7 *crunch*"), String(cOk), false); sparks(f.x + f.face * 10, fy - f.y - 80, 10, false, null, ["#e0b060", "#8a5a2b"]); }
@@ -324,6 +401,10 @@ PanelWindow {
         case "idle": {
             f.cd -= dt;
             if (g.shieldOn && tryBlock(f, e, dist, dt)) break;
+            if (g.superOn && f.sp >= 100 && f.cd <= 0 && !f.noWep) {
+                const smv = f.superMv || (f.superMv = superOf(wp));
+                if ((!smv.lunge || dist < 430) && Math.random() < 0.5) { startMove(f, smv); break; }
+            }
             const mr = Math.min(wp.range, 104);                     // melee reach (mic/laser too: bonk / butt bash)
             if (f.cd > 0) { if (dist > mr + 40 && Math.random() < 0.04 * dt) f.st = "dash"; break; }
             const stall = sm.frame - (sm.lastDmg || 0) > 90;
@@ -597,6 +678,7 @@ PanelWindow {
     readonly property bool shaderOk: g.crowdShader && crowdFx.status !== ShaderEffect.Error
     onShaderOkChanged: if (!shaderOk) console.warn("crew-fight: crowd shader unavailable (" + crowdFx.log + "), using the canvas crowd")
     property real flashO: 0
+    property color flashC: "#ffffff"
     property real scanO: 0
     property real vigO: 0
     property string jName: ""
@@ -625,7 +707,8 @@ PanelWindow {
             + "|" + (f.noWep ? 1 : 0) + "|" + ((st === "dash" || st === "walk") ? Math.floor(fr / 3) % 2 : "")
             + "|" + (st === "ko" ? (f.y === 0 && Math.abs(f.vx) < 2 ? "L" : Math.round(fr % 40)) : "") + "|" + (st === "jatk" ? (f.vy > 0 ? 1 : 0) + ":" + (f.vy < 0 ? 1 : 0) : "")
             + "|" + (f.stun > 0 ? Math.round(fr * 2) : "") + "|" + (f.x % 1 >= 0.5 ? 1 : 0) + (f.y % 1 >= 0.5 ? 1 : 0) + "|" + f.wep.id + "|" + (f.st === "win" ? Math.round(fr) : "")
-            + "|" + (st === "block" ? Math.floor(fr / 3) % 2 : "") + (f.bflash > 0 ? "b" + Math.floor(f.bflash) : "");
+            + "|" + (st === "block" ? Math.floor(fr / 3) % 2 : "") + (f.bflash > 0 ? "b" + Math.floor(f.bflash) : "")
+            + "|" + (g.superOn && f.sp >= 100 ? Math.floor(fr / 5) % 2 : "");
     }
     function paintLayers() {
         const s = sm, fr = s.frame;
@@ -659,6 +742,7 @@ PanelWindow {
         world.x = Math.round(450 - s.camZ * (s.camX - shx));
         world.y = Math.round(280 - s.camZ * (s.camY - shy));
         flashO = s.flash > 0 ? Math.min(0.85, s.flash / 8) : 0;
+        flashC = s.flash > 0 ? s.flashC : "#ffffff"; if (s.flash <= 0) s.flashC = "#ffffff";
         scanO = s.scan > 0 ? 1 : 0;
         vigO = Math.max(0, Math.min(1, s.vig));
         const nm = n => (String(n).length > 10 ? String(n).slice(0, 9) + "…" : String(n));
@@ -972,6 +1056,7 @@ PanelWindow {
                 else if (f.st === "ko" || f.st === "jatk") { ctx.translate(f.x, by + h / 2); ctx.rotate((f.st === "ko" ? -1 : 1) * f.face * Math.min(1.2, (sm.frame % 40) / 12)); ctx.translate(-f.x, -(by + h / 2)); }
                 const ga = ctx.globalAlpha;
                 ctx.globalAlpha = ga * 0.25; px(ctx, "#000000", f.x - 22 + f.y / 8, fy - 4, Math.max(4, 44 - f.y / 4), 4); ctx.globalAlpha = ga;
+                if (ar.g.superOn && f.st !== "ko" && (f.sp >= 100 || (f.st === "atk" && f.mv && f.mv.k === "super" && f.t > 12))) drawSuperAura(ctx, f);
                 if (sitting) { px(ctx, "#8a5a2b", f.x - 22, fy - 22, 44, 6); px(ctx, "#5a3a1b", f.x - 20, fy - 16, 5, 16); px(ctx, "#5a3a1b", f.x + 15, fy - 16, 5, 16); }
                 const walk = ((f.st === "dash" || f.st === "walk") && Math.floor(sm.frame / 3) % 2) ? p : 0;
                 if (sitting) { px(ctx, DK, bx + 5 * p + f.face * 2 * p, by + h - 2 * p, 3 * p, 2 * p); px(ctx, DK, bx + 10 * p + f.face * 2 * p, by + h - 2 * p, 3 * p, 2 * p); }
@@ -1017,6 +1102,16 @@ PanelWindow {
                 if (f.stun > 0 && f.st !== "ko") for (let k = 0; k < 3; k++) { const a = sm.frame / 4 + k * 2.1; px(ctx, "#ffe066", f.x + Math.cos(a) * 22 - 3, hy - 8 + Math.sin(a) * 5, 6, 6); }
                 if (f.st === "ko") { ctx.fillStyle = "#e04848"; ctx.font = "bold 16px \"" + Theme.fontTitle + "\""; ctx.textAlign = "center"; ctx.fillText("x_x", f.x, hy + hs / 2 + 6); }
                 if (f.st === "block") drawShield(ctx, f, front, arm, by, h, p);
+                ctx.restore();
+            }
+            // super ready / charging: a pulsing golden glow behind the body and a ring on the floor
+            function drawSuperAura(ctx, f) {
+                const sm = ar.sm, fy = ar.fy, ch = f.st === "atk", ph = Math.floor(sm.frame / 5) % 2;
+                ctx.save();
+                ctx.globalAlpha = ch ? 0.4 : 0.18 + ph * 0.08; ctx.fillStyle = "#ffd34d";
+                ctx.beginPath(); ctx.ellipse(f.x - (ch ? 54 : 40), fy - f.y - (ch ? 120 : 108), ch ? 108 : 80, ch ? 124 : 112); ctx.fill();
+                ctx.globalAlpha = ch ? 0.6 : 0.4; ctx.fillStyle = "#fff2a8";
+                ctx.beginPath(); ctx.ellipse(f.x - 34, fy - f.y - 8, 68, 12); ctx.fill();
                 ctx.restore();
             }
             // block: forearms crossed in front, a glowing bubble round the whole body (flashes white when a hit lands)
@@ -1289,7 +1384,7 @@ PanelWindow {
                 PxText { anchors.horizontalCenter: parent.horizontalCenter; text: ar.jRound; color: ar.cAccent2; font.bold: true; font.pixelSize: 11 }
             }
         }
-        Rectangle { anchors.fill: parent; color: "#ffffff"; opacity: ar.flashO; visible: opacity > 0 }
+        Rectangle { anchors.fill: parent; color: ar.flashC; opacity: ar.flashO; visible: opacity > 0 }
         Canvas {
             id: scanCv
             anchors.fill: parent
@@ -1322,20 +1417,41 @@ PanelWindow {
                 readonly property var who: index === 0 ? ar.g.a : ar.g.b
                 readonly property real hp: index === 0 ? ar.g.hpA : ar.g.hpB
                 readonly property var wp: index === 0 ? ar.g.wa : ar.g.wb
+                readonly property real sp: index === 0 ? ar.g.spA : ar.g.spB
+                readonly property bool sdOk: index === 0 ? ar.g.sdA : ar.g.sdB
                 x: index === 0 ? 20 : 900 - width - 20
                 y: 14
-                width: 300; height: 44
+                width: 300; height: ar.g.superOn || ar.g.shieldOn ? 52 : 44
                 Rectangle { anchors.fill: parent; color: ar.cFace; border.width: 3; border.color: ar.g.coat(hud.who ? hud.who.id : "") }
                 PxText { x: 10; y: 5; text: hud.who ? hud.who.name : ""; color: ar.cText; elide: Text.ElideRight; width: 200 }
                 PxText { x: hud.width - width - 10; y: 5; text: Math.round(hud.hp) + " HP"; color: ar.cText }
                 Rectangle {
-                    x: 10; y: hud.height - 15; width: hud.width - 20; height: 8; color: ar.cSunken
+                    x: 10; y: 29; width: hud.width - 20; height: 8; color: ar.cSunken
                     Rectangle {
                         x: hud.index === 1 ? parent.width - width : 0
                         width: parent.width * hud.hp / 100; height: parent.height
                         color: hud.hp > 50 ? ar.cOk : hud.hp > 20 ? "#e0b040" : ar.cDanger
                         Behavior on width { NumberAnimation { duration: 300 } }
                     }
+                }
+                // super meter (fills from hits dealt and taken; gold + pulsing when ready) and the shield-ready icon
+                Rectangle {
+                    visible: ar.g.superOn
+                    x: hud.index === 0 ? 10 : 10 + (ar.g.shieldOn ? 22 : 0); y: 40
+                    width: hud.width - 20 - (ar.g.shieldOn ? 22 : 0); height: 5; color: ar.cSunken
+                    Rectangle {
+                        x: hud.index === 1 ? parent.width - width : 0
+                        width: parent.width * hud.sp / 100; height: parent.height
+                        color: hud.sp >= 100 ? "#ffd34d" : ar.cAccent2
+                        Behavior on width { NumberAnimation { duration: 200 } }
+                        SequentialAnimation on opacity { running: hud.sp >= 100; loops: Animation.Infinite; NumberAnimation { to: 0.45; duration: 250 } NumberAnimation { to: 1; duration: 250 } }
+                    }
+                }
+                Rectangle {
+                    visible: ar.g.shieldOn
+                    x: hud.index === 0 ? hud.width - 10 - width : 10; y: 38
+                    width: 16; height: 9; color: hud.sdOk ? "#7fe0ff" : "transparent"; border.width: 1; border.color: "#7fe0ff"; opacity: hud.sdOk ? 1 : 0.4
+                    radius: 3
                 }
                 Rectangle {
                     x: hud.index === 0 ? 0 : hud.width - width; y: hud.height + 3
