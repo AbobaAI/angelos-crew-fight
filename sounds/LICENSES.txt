@@ -10,6 +10,7 @@ Author: the crew-fight plugin authors, 2026. Rebuild (needs ffmpeg): ./gen.sh
 
 Files: punch slap crack homerun splat feedback boom clack keys thud zap whoosh crit ko
 gong bell cheer sting fanfare swoosh blip crowd
+block parry supercharge super heal boost fuse drop
 
 The shader shaders/crowd.frag(.qsb) and all QML code are covered by the plugin's MIT
 licence (../LICENSE).

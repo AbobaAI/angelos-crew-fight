@@ -27,6 +27,15 @@ g cheer    2.20 "$N*sin(PI*t/2.2)*(0.8+0.2*sin(2*PI*7*t))" "bandpass=f=1500:w=18
 g sting    0.50 "0.5*sin(2*PI*523*t)*lt(t,0.13)+0.5*sin(2*PI*659*t)*gte(t,0.13)*lt(t,0.26)+0.5*sin(2*PI*784*t)*gte(t,0.26)*exp(-5*(t-0.26))" "lowpass=f=4000"
 g swoosh   0.60 "$N*sin(PI*t/0.6)" "highpass=f=1200"
 g blip     0.25 "0.5*sin(2*PI*880*t)*lt(t,0.1)+0.5*sin(2*PI*660*t)*gte(t,0.12)*exp(-8*(t-0.12))"
+# gameplay v2.1: block clang, perfect-block ring, super charge-up + impact, pickups
+g block      0.30 "0.55*sin(2*PI*620*t)*exp(-22*t)+0.35*sin(2*PI*1370*t)*exp(-30*t)+0.5*sin(2*PI*90*t)*exp(-25*t)+0.45*$N*exp(-90*t)"
+g parry      0.70 "(0.5*sin(2*PI*1760*t)+0.35*sin(2*PI*2637*t)+0.25*sin(2*PI*3520*t))*exp(-9*t)+0.5*$N*exp(-100*t)"
+g supercharge 0.85 "(0.3+0.7*t/0.85)*(0.6*sin(2*PI*(180*t+650*t*t))+0.3*sin(2*PI*(360*t+1300*t*t))+0.12*$N*t)"
+g super      1.40 "sin(2*PI*(90*t-40*t*t))*exp(-3*t)+0.7*$N*exp(-9*t)+0.4*sin(2*PI*(1800*t-2400*t*t))*exp(-6*t)" "lowpass=f=7000"
+g heal       0.80 "0.45*(lt(t,0.1)*sin(2*PI*1047*t)+gte(t,0.1)*lt(t,0.2)*sin(2*PI*1319*t)+gte(t,0.2)*lt(t,0.3)*sin(2*PI*1568*t)+gte(t,0.3)*sin(2*PI*2093*t)*exp(-5*(t-0.3)))" "aecho=0.7:0.4:70:0.3"
+g boost      0.55 "0.6*$N*sin(PI*t/0.55)+0.4*sin(2*PI*(400*t+1700*t*t))*exp(-2.5*t)" "highpass=f=450"
+g fuse       1.10 "$N*(0.25+0.75*gt(random(1),0.55))*(0.6+0.4*sin(2*PI*35*t))" "highpass=f=2200,lowpass=f=9000"
+g drop       0.22 "sin(2*PI*(400*t+3200*t*t))*exp(-14*t)+0.3*$N*exp(-60*t)"
 # fanfare: proper notes (C5 G5 C6 E6 held)
 ffmpeg -v error -y -f lavfi -i "aevalsrc='(lt(t,0.18)*sin(2*PI*523*t)+gte(t,0.2)*lt(t,0.38)*sin(2*PI*784*t)+gte(t,0.4)*lt(t,0.58)*sin(2*PI*1047*t)+gte(t,0.6)*sin(2*PI*1319*t)*exp(-1.4*(t-0.6)))*(1+0.4*sin(2*PI*5*t)*gte(t,0.6))*0.45':s=44100:d=1.7" -af "aecho=0.8:0.5:60:0.3,alimiter=limit=0.7,aformat=sample_fmts=s16:channel_layouts=mono" fanfare.wav
 # crowd ambience loop (6 s, pink noise, soft)

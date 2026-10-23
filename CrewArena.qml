@@ -53,13 +53,15 @@ PanelWindow {
         return { "who": who, "side": side, "x": side === 0 ? -40 : ww + 40, "y": 0, "vx": side === 0 ? 10 : -10, "vy": 15,
                  "face": side === 0 ? 1 : -1, "st": "enter", "t": 0, "cd": 20, "flash": 0, "trail": [], "coat": g.coat(who.id),
                  "img": who.avatar ? "file://" + who.avatar : "", "hp": 100, "squash": 0, "wep": side === 0 ? g.wa : g.wb,
-                 "stun": 0, "mv": null, "noWep": false, "alpha": 1, "low": false, "spin": 0 };
+                 "stun": 0, "mv": null, "noWep": false, "alpha": 1, "low": false, "spin": 0,
+                 "blkAge": 99, "blkCd": 0, "gd": 100, "bflash": 0, "seen": 0, "atkN": 0, "sp": 0, "spd": 0, "mvT": 0 };
     }
     Component.onCompleted: {
         sm = { "f": [mkF(g.a, 0), mkF(g.b, 1)], "mvStat": { "m": 0, "r": 0 }, "parts": [], "floats": [], "proj": [], "beams": [], "rings": [], "shake": 0, "slow": 1, "slowT": 0,
                "zoom": 1, "zx": 450, "zy": fy - 60, "ropeW": [0, 0], "hype": 0, "frame": 0, "phase": "intro", "phT": 0, "round": 0,
                "roundT": 0, "dmg": [0, 0], "scores": [0, 0], "cardX": -80, "cardHold": 0, "flash": 0, "sayCd": 0, "last": "",
-               "combo": 0, "endT": 0, "trX": [112, 788], "rec": null, "maxBeam": 0, "cam": 0, "camX": 450, "camY": 280, "camZ": 1, "punch": 0, "px": 450, "py": 300, "freeze": 0, "sdx": 1, "sdy": 0.3, "vig": 0 };
+               "combo": 0, "endT": 0, "trX": [112, 788], "rec": null, "maxBeam": 0, "cam": 0, "camX": 450, "camY": 280, "camZ": 1, "punch": 0, "px": 450, "py": 300, "freeze": 0, "sdx": 1, "sdy": 0.3, "vig": 0, "fightT": 0, "maxStall": 0, "pidN": 0,
+               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0] } };
         for (const f of sm.f)
             if (f.img) { fCv0.loadImage(f.img); fCv1.loadImage(f.img); }
         g.say = tl("Дааамы и господааа! Добро пожаловать на бой года!", "Ladies and gentlemen! Welcome to the fight of the year!");
@@ -130,6 +132,8 @@ PanelWindow {
         dmg = dmg * (mv.dm || 1) + (jump ? 4 : 0);
         if (crit) dmg *= (wp.critMul || 2);
         dmg = Math.max(1, Math.round(dmg * dmgScale * (g.rounds === 0 ? 1 + 0.5 * (sm.round - 1) : 1)));
+        if (g.shieldOn && def.st === "block") { blocked(att, def, dmg, crit, mv, wp, hx, hy); return; }
+        sm.st.hits[att.side]++;
         def.hp = Math.max(0, def.hp - dmg);
         hitSound(wp, mv, crit);
         sm.dmg[att.side] += dmg;
@@ -172,6 +176,66 @@ PanelWindow {
         g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp;
         if (def.hp <= 0) finisher(att, def);
     }
+    // a hit that lands on a raised shield: chip damage, no stagger; a perfectly timed block staggers the attacker
+    function blocked(att, def, dmg, crit, mv, wp, hx, hy) {
+        const sup = !!mv.sp;
+        const perfect = !sup && Math.random() < (def.blkAge >= 3 && def.blkAge <= 9 ? 0.38 : 0.1);
+        const d = perfect ? 0 : Math.max(1, Math.round(dmg * (sup ? 0.5 : crit ? 0.32 : 0.2)));
+        def.hp = Math.max(0, def.hp - d);
+        sm.dmg[att.side] += d; sm.lastDmg = sm.frame;
+        def.vx = att.face * 2.5; def.flash = 0; def.bflash = 7;
+        att.vx = -att.face * (perfect ? 7 : 3);
+        def.gd -= sup ? 120 : 14 + dmg * 0.8;
+        sm.st.blk[def.side]++;
+        g.sfx(perfect ? "parry" : "block", 0.9);
+        g.sfx(hitSfx[wp.id] || "punch", 0.25);
+        sm.freeze = Math.max(sm.freeze, perfect ? 4 : 2);
+        sm.shake = Math.max(sm.shake, perfect ? 6 : 3);
+        sm.rings.push({ "x": hx, "y": hy, "r": 6, "life": 12, "round": true, "c": perfect ? "#ffffff" : "#7fe0ff" });
+        for (let i = 0; i < (perfect ? 18 : 9); i++) {
+            const ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+            sm.parts.push({ "x": hx, "y": hy, "vx": Math.cos(ang) * sp, "vy": Math.sin(ang) * sp, "g": 0.15, "life": 12 + Math.random() * 8, "c": rnd(["#7fe0ff", "#bff3ff", "#ffffff"]), "s": 4 });
+        }
+        snapEv(perfect ? "parry" : "block", 90);
+        floatText(hx, hy - 24, perfect ? tl("ИДЕАЛЬНЫЙ БЛОК!", "PERFECT BLOCK!") : tl("БЛОК!", "BLOCK!"), perfect ? "#ffffff" : "#7fe0ff", perfect);
+        if (d > 0) floatText(hx, hy - 4, "−" + d, "#bff3ff", false);
+        if (perfect) {
+            att.st = "hurt"; att.t = 18; att.stun = 22; att.flash = 4; att.squash = 6; att.mv = null; att.noWep = false;
+            def.t = Math.min(def.t, 3); def.cd = 0;
+            sm.st.par[def.side]++;
+            sm.cam = Math.max(sm.cam, 14);
+            floatText(att.x, fy - att.y - 150, tl("оглушён(а)!", "staggered!"), "#6ec3e8", false);
+            comment(rnd(tl([def.who.name + " читает " + att.who.name + " как открытую книгу!", "Идеальный блок! Контратака на подходе!", "Парирование! " + att.who.name + " в шоке!"], [def.who.name + " reads " + att.who.name + " like an open book!", "Perfect block! A counter is coming!", "Parried! " + att.who.name + " is stunned!"])));
+        } else if (Math.random() < 0.3) comment(rnd(tl(["Щит держит!", "Какой блок!", "Через такую защиту не пройти!"], ["The shield holds!", "What a block!", "Nothing gets through that guard!"])));
+        if (def.gd <= 0 && def.st === "block") {
+            def.gd = 0; def.st = "hurt"; def.t = 20; def.stun = 30; def.blkCd = 90; def.squash = 6;
+            sm.st.gb[def.side]++;
+            floatText(def.x, fy - def.y - 150, tl("ЩИТ РАЗБИТ!", "GUARD BREAK!"), "#ff8a3d", true); snapEv("guard", 80);
+            sparks(def.x, fy - def.y - 60, 16, true, null, ["#7fe0ff", "#ffffff"]);
+            g.sfx("crit", 0.5);
+        }
+        g.lastHit = wp.id + ":" + (mv.id || "basic") + (perfect ? " parry" : " block") + " " + d;
+        g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp;
+        if (def.hp <= 0) finisher(att, def);
+    }
+    function tryBlock(f, e, dist, dt) {
+        if (f.blkCd > 0 || f.gd < 30 || f.stun > 0) return false;
+        let threat = 0, id = 0;
+        if (e.st === "atk" && e.mv && e.mv.k !== "eat" && e.mv.k !== "super") {
+            const reach = e.mv.r ? Math.min(e.mv.r, 340) : Math.min(e.wep.range, 104) + 16;
+            if (dist < reach) { threat = 1; id = e.atkN; }
+        } else if (e.st === "jatk" && dist < 140) { threat = 0.8; id = e.atkN; }
+        if (!threat)
+            for (const q of sm.proj)
+                if (q.tgt === f && q.k !== "mic" && Math.abs(q.x - f.x) < 150 && (q.x - f.x) * q.vx < 0) { if (!q.pid) q.pid = 1000 + (++sm.pidN); threat = 0.9; id = q.pid; break; }
+        if (threat) {
+            if (f.seen === id) return false;                   // already decided about this attack
+            f.seen = id;
+            if (Math.random() >= (0.4 + (f.hp < 40 ? 0.15 : 0) + (f.hp < 20 ? 0.1 : 0)) * threat) return false;
+        } else if (f.cd <= 0 || dist > 190 || Math.random() > 0.012 * dt) return false;   // idle guard stance while waiting
+        f.st = "block"; f.t = 14 + Math.random() * 4; f.blkAge = 0; f.gd -= 8; f.vx = 0;
+        return true;
+    }
     function finisher(att, def) {
         const fin = att.wep.fin;
         def.st = "ko"; def.vx = att.face * 20; def.vy = 13;
@@ -196,7 +260,7 @@ PanelWindow {
         comment(tl("НОКАУТ! ", "KNOCKOUT! ") + fin.t + " " + att.who.name + tl(" побеждает ", " wins ") + att.wep.ins + "!", true);
     }
     function startMove(f, mv) {
-        f.st = "atk"; f.mv = mv; f.t = mv.t || 10; f.hitDone = false;
+        f.st = "atk"; f.mv = mv; f.t = mv.t || 10; f.hitDone = false; f.atkN++;
         const k = mv.k;
         if (k === "swing" || k === "overhead" || k === "homerun" || k === "spacebar" || k === "flurry" || k === "throw") g.sfx("whoosh", 0.55);
         else if (k === "spray") g.sfx("keys", 0.7);
@@ -244,6 +308,9 @@ PanelWindow {
         }
         if (f.squash > 0) f.squash -= dt;
         if (f.flash > 0) f.flash -= dt;
+        if (f.bflash > 0) f.bflash -= dt;
+        if (f.blkCd > 0) f.blkCd -= dt;
+        if (f.st !== "block" && f.gd < 100) f.gd = Math.min(100, f.gd + 0.8 * dt);
         if (f.st === "dash" || Math.abs(f.vx) > 8) { f.trail.unshift({ "x": f.x, "y": f.y }); if (f.trail.length > 4) f.trail.pop(); }
         else if (f.trail.length) f.trail.pop();
     }
@@ -256,6 +323,7 @@ PanelWindow {
         switch (f.st) {
         case "idle": {
             f.cd -= dt;
+            if (g.shieldOn && tryBlock(f, e, dist, dt)) break;
             const mr = Math.min(wp.range, 104);                     // melee reach (mic/laser too: bonk / butt bash)
             if (f.cd > 0) { if (dist > mr + 40 && Math.random() < 0.04 * dt) f.st = "dash"; break; }
             const stall = sm.frame - (sm.lastDmg || 0) > 90;
@@ -270,7 +338,7 @@ PanelWindow {
             else if (mel.length) cand = mel;
             else { f.st = "dash"; f.forced = stall; break; }
             if (f.rep >= 2 && cand.length > 1) cand = cand.filter(m => m.id !== f.lastMv);
-            if (cand === mel && Math.random() < 0.14 && dist < mr && f.hp > 0) { f.st = "jatk"; f.vy = 13; f.vx = f.face * Math.min(7, dist / 8 + 2); f.hitDone = false; f.mv = { "id": "jump", "n": tl("прыжок", "jump") }; f.lastRanged = false; sm.mvStat.m++; break; }
+            if (cand === mel && Math.random() < 0.14 && dist < mr && f.hp > 0) { f.st = "jatk"; f.atkN++; f.vy = 13; f.vx = f.face * Math.min(7, dist / 8 + 2); f.hitDone = false; f.mv = { "id": "jump", "n": tl("прыжок", "jump") }; f.lastRanged = false; sm.mvStat.m++; break; }
             const pick = rnd(cand);
             f.rep = pick.id === f.lastMv ? (f.rep || 0) + 1 : 1; f.lastMv = pick.id;
             if (pick.r) { f.lastRanged = true; f.rT = sm.frame; sm.mvStat.r++; } else { f.lastRanged = false; if (pick.k !== "eat") sm.mvStat.m++; }
@@ -278,6 +346,10 @@ PanelWindow {
             startMove(f, pick);
             break;
         }
+        case "block":
+            f.blkAge += dt;
+            if (f.t <= 0) { f.st = "idle"; f.cd = 3 + Math.random() * 6; f.blkCd = 34 + Math.random() * 30; }
+            break;
         case "dash":
             f.vx = f.face * 9;
             if (dist <= Math.min(70, Math.min(wp.range, 104) - 24) || (f.forced && dist <= Math.min(wp.range, 104) - 20)) { f.forced = false; f.st = "idle"; f.cd = 3 + Math.random() * 6; dust(f.x - f.face * 20, 3); }
@@ -355,7 +427,9 @@ PanelWindow {
         } else if (sm.phase === "fight") {
             if (sm.phT > 30 && g.banner === "FIGHT!") g.banner = "";
             sm.roundT -= dt;
+            sm.fightT += dt; sm.maxStall = Math.max(sm.maxStall, sm.frame - (sm.lastDmg || 0));
             brain(A, B, dt); brain(B, A, dt);
+            for (const f of sm.f) { f.mvT = (f.st === "dash" || f.st === "fetch") ? f.mvT + dt : 0; if (f.mvT > sm.st.maxMv) sm.st.maxMv = f.mvT; }
             for (const f of sm.f) physics(f, dt);
             const d = B.x - A.x;
             if (sm.phase === "fight" && Math.abs(d) < 40 && A.y < 30 && B.y < 30) { const push = (40 - Math.abs(d)) / 2 * (d >= 0 ? 1 : -1); A.x -= push; B.x += push; }
@@ -418,6 +492,8 @@ PanelWindow {
     function toWin() {
         console.info("crew-fight moves " + sm.f[0].wep.id + " vs " + sm.f[1].wep.id + ": melee " + sm.mvStat.m + ", ranged " + sm.mvStat.r);
         sm.phase = "win"; sm.phT = 0; sm.endT = 1; sm.pod = { "rise": 0, "st": 0, "jt": 0, "x0": 0, "t2": 0 };
+        g.lastResult = JSON.stringify({ "fight": Math.round(sm.fightT / 3) / 10, "ko": !!sm.byKO, "win": sm.winner.side, "rounds": g.rounds, "wep": [sm.f[0].wep.id, sm.f[1].wep.id],
+                                        "hp": [Math.round(sm.f[0].hp), Math.round(sm.f[1].hp)], "stall": Math.round(sm.maxStall / 3) / 10, "mv": Math.round(sm.st.maxMv / 3) / 10, "st": sm.st });
         sm.winner.st = "win"; sm.winner.sit = false;
         if (sm.loser.st !== "ko") sm.loser.st = "idle";
         g.banner = g.tourFinal ? "TOURNAMENT CHAMPION" : sm.winner.who.name + " WINS";
@@ -433,6 +509,7 @@ PanelWindow {
         sm.frame += dt;
         stepRoundFlow(dt);
         g.phase = sm.phase;
+        { const q0 = sm.f[0], q1 = sm.f[1]; g.spA = Math.round(q0.sp); g.spB = Math.round(q1.sp); g.sdA = q0.blkCd <= 0 && q0.gd >= 30; g.sdB = q1.blkCd <= 0 && q1.gd >= 30; }
         const sec = Math.max(0, Math.ceil(sm.roundT / 30));
         g.timerTxt = sm.phase === "fight" ? "0:" + (sec < 10 ? "0" : "") + sec : "";
         sm.proj = sm.proj.filter(q => {
@@ -547,7 +624,8 @@ PanelWindow {
             + "|" + (f.fade ? Math.floor(fr / 2) % 2 + ":" + f.alpha : "") + "|" + (mv && f.mv ? f.mv.id + ":" + Math.round(f.t * 2) : "")
             + "|" + (f.noWep ? 1 : 0) + "|" + ((st === "dash" || st === "walk") ? Math.floor(fr / 3) % 2 : "")
             + "|" + (st === "ko" ? (f.y === 0 && Math.abs(f.vx) < 2 ? "L" : Math.round(fr % 40)) : "") + "|" + (st === "jatk" ? (f.vy > 0 ? 1 : 0) + ":" + (f.vy < 0 ? 1 : 0) : "")
-            + "|" + (f.stun > 0 ? Math.round(fr * 2) : "") + "|" + (f.x % 1 >= 0.5 ? 1 : 0) + (f.y % 1 >= 0.5 ? 1 : 0) + "|" + f.wep.id + "|" + (f.st === "win" ? Math.round(fr) : "");
+            + "|" + (f.stun > 0 ? Math.round(fr * 2) : "") + "|" + (f.x % 1 >= 0.5 ? 1 : 0) + (f.y % 1 >= 0.5 ? 1 : 0) + "|" + f.wep.id + "|" + (f.st === "win" ? Math.round(fr) : "")
+            + "|" + (st === "block" ? Math.floor(fr / 3) % 2 : "") + (f.bflash > 0 ? "b" + Math.floor(f.bflash) : "");
     }
     function paintLayers() {
         const s = sm, fr = s.frame;
@@ -589,6 +667,33 @@ PanelWindow {
         jScore = g.scoreTxt + "   " + live;
         jRound = tl("РАУНД ", "ROUND ") + Math.max(1, s.round) + (g.rounds ? "/" + g.rounds : "") + (g.timerTxt ? "  ·  " + g.timerTxt : "");
     }
+    // test helper: grab the arena item itself (never the screen) when an event fires: IPC snap <events|all> <dir>
+    property var snapN: ({})
+    property var snapQ: []
+    function snapEv(ev, delay) {
+        if (!g.snapDir || (g.snapEv !== "all" && ("," + g.snapEv + ",").indexOf("," + ev + ",") < 0)) return;
+        const n = snapN[ev] || 0;
+        if (n >= 3) return;
+        snapN[ev] = n + 1;
+        snapQ = snapQ.concat([{ "at": Date.now() + (delay || 100), "path": g.snapDir + "/" + ev + "-" + (n + 1) + ".png" }]);
+    }
+    Timer {
+        interval: 25; repeat: true; running: ar.snapQ.length > 0
+        onTriggered: {
+            const due = ar.snapQ.filter(q => q.at <= Date.now());
+            if (!due.length) return;
+            ar.snapQ = ar.snapQ.filter(q => q.at > Date.now());
+            for (const q of due) stage.grabToImage(res => res.saveToFile(q.path));
+        }
+    }
+    function simStep(raw) {
+        const s = sm;
+        if (s.freeze > 0) { s.freeze -= raw; return false; }
+        const dt = s.slow * raw;
+        if (s.slowT > 0) { s.slowT -= raw; if (s.slowT <= 0) s.slow = 1; }
+        step(dt);
+        return true;
+    }
     Timer {
         id: tick
         interval: 16
@@ -603,12 +708,9 @@ PanelWindow {
             if (ar.paintAcc < 0.014) return;
             if (ar.g.eco && (++ar.ecoN & 1)) return;      // every second ~60 Hz step
             const ft = Math.min(0.066, ar.paintAcc); ar.paintAcc = 0;
-            const s = ar.sm, raw = ft * 30;
             ar.perfTick(ft);
-            if (s.freeze > 0) { s.freeze -= raw; ar.applyCam(); return; }
-            const dt = s.slow * raw;
-            if (s.slowT > 0) { s.slowT -= raw; if (s.slowT <= 0) s.slow = 1; }
-            ar.step(dt);
+            if (ar.g.turbo > 1) { for (let k = 0; k < ar.g.turbo && ar.sm; k++) ar.simStep(0.5); if (ar.sm) { ar.applyCam(); ar.paintLayers(); } return; }   // test helper
+            if (!ar.simStep(ft * 30)) { ar.applyCam(); return; }
             ar.applyCam();
             ar.paintLayers();
         }
@@ -914,6 +1016,26 @@ PanelWindow {
                 if (f.st === "atk" && f.mv && f.mv.k === "eyeblast") { px(ctx, "#ff4f6d", f.x - 10, hy + 14, 8, 8); px(ctx, "#ff4f6d", f.x + 4, hy + 14, 8, 8); }
                 if (f.stun > 0 && f.st !== "ko") for (let k = 0; k < 3; k++) { const a = sm.frame / 4 + k * 2.1; px(ctx, "#ffe066", f.x + Math.cos(a) * 22 - 3, hy - 8 + Math.sin(a) * 5, 6, 6); }
                 if (f.st === "ko") { ctx.fillStyle = "#e04848"; ctx.font = "bold 16px \"" + Theme.fontTitle + "\""; ctx.textAlign = "center"; ctx.fillText("x_x", f.x, hy + hs / 2 + 6); }
+                if (f.st === "block") drawShield(ctx, f, front, arm, by, h, p);
+                ctx.restore();
+            }
+            // block: forearms crossed in front, a glowing bubble round the whole body (flashes white when a hit lands)
+            function drawShield(ctx, f, front, arm, by, h, p) {
+                const sm = ar.sm, fy = ar.fy, fl = f.bflash > 0, ph = Math.floor(sm.frame / 3) % 2;
+                px(ctx, arm, front - p, by + h - 19 * p, 3 * p, 8 * p);
+                px(ctx, "#e04848", front - p, by + h - 21 * p, 3 * p, 3 * p);
+                const cx = f.x + f.face * 8, cy = fy - f.y - 52, rx = 46, ry = 64;
+                ctx.save();
+                ctx.globalAlpha = fl ? 0.55 : 0.2 + ph * 0.06; ctx.fillStyle = fl ? "#ffffff" : "#7fe0ff";
+                ctx.beginPath(); ctx.ellipse(cx - rx, cy - ry, rx * 2, ry * 2); ctx.fill();
+                ctx.globalAlpha = 0.95; ctx.strokeStyle = fl ? "#ffffff" : "#bff3ff"; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.ellipse(cx - rx, cy - ry, rx * 2, ry * 2); ctx.stroke();
+                ctx.globalAlpha = 0.9;
+                for (let k = 0; k < 10; k++) {                 // pixel facets drifting round the rim
+                    const a2 = (k / 10) * Math.PI * 2 + ph * 0.15;
+                    px(ctx, k % 2 ? "#ffffff" : "#7fe0ff", cx + Math.cos(a2) * (rx + 2) - 3, cy + Math.sin(a2) * (ry + 2) - 3, 6, 6);
+                }
+                ctx.globalAlpha = 0.5; px(ctx, "#ffffff", cx + f.face * 24, cy - 40, 6, 22); px(ctx, "#ffffff", cx + f.face * 24, cy - 14, 6, 6);
                 ctx.restore();
             }
             function drawRope(ctx, yOff, col, front) {

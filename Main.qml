@@ -51,6 +51,19 @@ Item {
     readonly property string langSetting: String(cfg("language", "auto"))
     readonly property int defRounds: parseRounds(String(cfg("rounds", 1)))
     readonly property bool crowdShader: cfg("crowdShader", true) !== false
+    // gameplay mechanics (Settings → Gameplay): block, super move, arena pickups
+    readonly property bool shieldOn: cfg("gpShield", true) !== false
+    readonly property bool superOn: cfg("gpSuper", true) !== false
+    readonly property bool pickupsOn: cfg("gpPickups", true) !== false
+    readonly property string pickupRate: ["rare", "normal", "often"].indexOf(String(cfg("gpPickupRate", "normal"))) >= 0 ? String(cfg("gpPickupRate", "normal")) : "normal"
+    property string snapEv: ""            // test helper: save the arena (not the screen) as a PNG when these events fire
+    property string snapDir: ""
+    property int turbo: 1                 // test helper: N simulation steps per tick, no sound
+    property string lastResult: ""
+    property real spA: 0
+    property real spB: 0
+    property bool sdA: true
+    property bool sdB: true
     readonly property string lang: langSetting === "ru" || langSetting === "en" ? langSetting : (Config.appearance.language === "en" ? "en" : "ru")
     readonly property bool en: lang === "en"
     function t(ru, en) { return root.en ? en : ru; }
@@ -61,10 +74,10 @@ Item {
         return Math.max(0.5, Math.min(3, Math.round(Math.min(w * 0.47 / 900, h * 0.52 / 560) * 20) / 20));   // 5% steps
     }
     readonly property real master: soundOn ? Math.pow(soundVol / 100, 2) : 0
-    readonly property var sfxNames: ["punch", "slap", "crack", "homerun", "splat", "feedback", "boom", "clack", "keys", "thud", "zap", "whoosh", "crit", "ko", "gong", "bell", "cheer", "sting", "fanfare", "swoosh", "blip"]
+    readonly property var sfxNames: ["punch", "slap", "crack", "homerun", "splat", "feedback", "boom", "clack", "keys", "thud", "zap", "whoosh", "crit", "ko", "gong", "bell", "cheer", "sting", "fanfare", "swoosh", "blip", "block", "parry", "supercharge", "super", "heal", "boost", "fuse", "drop"]
     property var sfxLast: ({})
     function sfx(name, gain) {
-        if (!soundOn || soundVol <= 0) return;
+        if (!soundOn || soundVol <= 0 || turbo > 1) return;
         const it = sfxRep.itemAt(sfxNames.indexOf(name));
         if (!it) return;
         const now = Date.now();
@@ -300,7 +313,7 @@ Item {
         wa = weapon(ka); wb = weapon(kb); lastHit = "";
         rounds = rr === undefined ? defRounds : parseRounds(rr);
         round = 0; phase = "intro"; timerTxt = ""; scoreTxt = "0 : 0"; finText = ""; say = ""; sayL = ""; sayR = "";
-        a = x; b = y; hpA = 100; hpB = 100; caption = ""; combo = 0; ko = false;
+        a = x; b = y; hpA = 100; hpB = 100; spA = 0; spB = 0; sdA = true; sdB = true; lastResult = ""; caption = ""; combo = 0; ko = false;
         banner = "";
         picking = false;
         matchWinner = -1;
@@ -491,6 +504,15 @@ Item {
             return root.weapons.map(w => w.id + " — " + w.name + (w.w < 2 ? root.t(" (редкое)", " (rare)") : "")).join("\n");
         }
         function stop(): void { root.stop(); }
+        // gameplay mechanics: on | off | toggle (persisted like the settings page)
+        function shield(v: string): string { const o = v === "toggle" ? !root.shieldOn : v !== "off" && v !== "0"; root.setCfg("gpShield", o); return "shield " + (o ? "on" : "off"); }
+        function superMove(v: string): string { const o = v === "toggle" ? !root.superOn : v !== "off" && v !== "0"; root.setCfg("gpSuper", o); return "super " + (o ? "on" : "off"); }
+        function pickups(v: string): string { const o = v === "toggle" ? !root.pickupsOn : v !== "off" && v !== "0"; root.setCfg("gpPickups", o); return "pickups " + (o ? "on" : "off"); }
+        function pickupRate(v: string): string { const r = v === "rare" || v === "often" ? v : "normal"; root.setCfg("gpPickupRate", r); return "pickup rate " + r; }
+        function gameplay(v: string): string { const o = v !== "off" && v !== "0"; root.setCfg("gpShield", o); root.setCfg("gpSuper", o); root.setCfg("gpPickups", o); return "shield+super+pickups " + (o ? "on" : "off"); }
+        // test helpers (not in the README): turbo N = N sim steps per tick, silent
+        function snap(ev: string, dir: string): string { root.snapEv = ev; root.snapDir = dir; return "snap " + ev + " -> " + dir; }
+        function turbo(n: string): string { root.turbo = Math.max(1, Math.min(60, parseInt(n) || 1)); return "turbo " + root.turbo; }
         // sound: on | off | toggle ; volume: 0-100 (persisted)
         function sound(state: string): string { return root.setSound(state === "toggle" ? !root.soundOn : state !== "off" && state !== "0"); }
         function volume(v: string): string { return root.setSound(undefined, parseInt(v) || 0); }
@@ -510,7 +532,7 @@ Item {
         function demoTournament(): string { return root.startTour(root.fakes, "1", true); }
         function demoTournamentN(n: string, rounds: string): string { return root.startTour(root.fakePool(parseInt(n) || 5), rounds, true); }
         function status(): string {
-            return JSON.stringify({ "live": root.live, "state": DiscordVoice.state, "people": root.people.map(p => p.name + ":" + p.id), "on": root.on, "hp": [root.hpA, root.hpB], "weapons": [root.wa ? root.wa.id : "", root.wb ? root.wb.id : ""], "lastHit": root.lastHit, "rounds": root.rounds, "round": root.round, "phase": root.phase, "score": root.scoreTxt, "say": root.say, "ko": root.ko, "combo": root.combo, "banner": root.banner, "caption": root.caption, "crewHidden": Config.discord.crewHidden, "added": root.added, "perf": root.perf, "moveStat": root.moveStat, "tour": root.tourJson(), "sound": { "on": root.soundOn, "volume": root.soundVol }, "crew": root.crewOn, "hint": root.crewHint, "settings": { "rounds": root.defRounds, "arenaName": root.arenaName, "scale": root.scaleSetting, "eco": root.eco, "language": root.lang, "crowdShader": root.crowdShader } });
+            return JSON.stringify({ "live": root.live, "state": DiscordVoice.state, "people": root.people.map(p => p.name + ":" + p.id), "on": root.on, "hp": [root.hpA, root.hpB], "weapons": [root.wa ? root.wa.id : "", root.wb ? root.wb.id : ""], "lastHit": root.lastHit, "rounds": root.rounds, "round": root.round, "phase": root.phase, "score": root.scoreTxt, "say": root.say, "ko": root.ko, "combo": root.combo, "banner": root.banner, "caption": root.caption, "crewHidden": Config.discord.crewHidden, "added": root.added, "perf": root.perf, "moveStat": root.moveStat, "tour": root.tourJson(), "sound": { "on": root.soundOn, "volume": root.soundVol }, "meters": [root.spA, root.spB], "result": root.lastResult ? JSON.parse(root.lastResult) : null, "crew": root.crewOn, "hint": root.crewHint, "settings": { "rounds": root.defRounds, "arenaName": root.arenaName, "scale": root.scaleSetting, "eco": root.eco, "language": root.lang, "crowdShader": root.crowdShader, "shield": root.shieldOn, "super": root.superOn, "pickups": root.pickupsOn, "pickupRate": root.pickupRate } });
         }
     }
 

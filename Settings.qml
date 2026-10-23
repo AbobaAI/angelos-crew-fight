@@ -45,6 +45,43 @@ Column {
         }
     }
     PxGroup {
+        title: I18n.t("Геймплей", "Gameplay")
+        icon: "heart"
+        width: parent.width
+        SettingRow {
+            label: I18n.t("Блок (щит)", "Block (shield)")
+            hint: I18n.t("бойцы сами ставят щит: урон ×0.2, идеальный блок оглушает атакующего", "fighters raise a shield on their own: damage ×0.2, a perfect block staggers the attacker")
+            PxToggle {
+                checked: root.get("gpShield", true) !== false
+                onToggled: c => root.set("gpShield", c)
+            }
+        }
+        SettingRow {
+            label: I18n.t("Суперудар", "Super move")
+            hint: I18n.t("шкала под HP растёт от ударов; полная — боец сам бьёт суперударом", "the meter under the HP bar fills from hits; when full the fighter fires a super")
+            PxToggle {
+                checked: root.get("gpSuper", true) !== false
+                onToggled: c => root.set("gpSuper", c)
+            }
+        }
+        SettingRow {
+            label: I18n.t("Предметы на арене", "Arena pickups")
+            hint: I18n.t("аптечка, ускорение и бомба падают на ринг", "heal kit, speed boost and bomb drop into the ring")
+            PxToggle {
+                checked: root.get("gpPickups", true) !== false
+                onToggled: c => root.set("gpPickups", c)
+            }
+        }
+        SettingRow {
+            label: I18n.t("Частота предметов", "Pickup frequency")
+            PxSegmented {
+                model: [{ "label": I18n.t("редко", "rare"), "value": "rare" }, { "label": I18n.t("норм", "normal"), "value": "normal" }, { "label": I18n.t("часто", "often"), "value": "often" }]
+                currentValue: String(root.get("gpPickupRate", "normal"))
+                onActivated: v => root.set("gpPickupRate", v)
+            }
+        }
+    }
+    PxGroup {
         title: I18n.t("Звук", "Sound")
         icon: "speaker"
         width: parent.width
