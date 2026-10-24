@@ -50,7 +50,7 @@ Column {
         width: parent.width
         SettingRow {
             label: I18n.t("Блок (щит)", "Block (shield)")
-            hint: I18n.t("бойцы сами ставят щит: урон ×0.2, идеальный блок оглушает атакующего", "fighters raise a shield on their own: damage ×0.2, a perfect block staggers the attacker")
+            hint: I18n.t("бойцы сами ставят щит: урон ×0.2; идеальный блок в первые мгновения щита оглушает атакующего", "fighters raise a shield on their own: damage ×0.2; a perfect block in the early shield window staggers the attacker")
             PxToggle {
                 checked: root.get("gpShield", true) !== false
                 onToggled: c => root.set("gpShield", c)

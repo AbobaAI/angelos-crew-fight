@@ -186,7 +186,8 @@ PanelWindow {
     // a hit that lands on a raised shield: chip damage, no stagger; a perfectly timed block staggers the attacker
     function blocked(att, def, dmg, crit, mv, wp, hx, hy) {
         const sup = !!mv.sp;
-        const perfect = !sup && Math.random() < (def.blkAge >= 3 && def.blkAge <= 9 ? 0.38 : 0.1);
+        // perfect = early shield window only (startup frames 0–2 don't count; holding too long doesn't either)
+        const perfect = !sup && def.blkAge >= 3 && def.blkAge <= 9;
         const d = perfect ? 0 : Math.max(1, Math.round(dmg * (sup ? 0.5 : crit ? 0.32 : 0.2)));
         def.hp = Math.max(0, def.hp - d);
         sm.dmg[att.side] += d; sm.lastDmg = sm.frame;
@@ -758,7 +759,7 @@ PanelWindow {
         stepRoundFlow(dt);
         stepItems(dt);
         g.phase = sm.phase;
-        { const q0 = sm.f[0], q1 = sm.f[1]; g.spA = Math.round(q0.sp); g.spB = Math.round(q1.sp); g.sdA = q0.blkCd <= 0 && q0.gd >= 30; g.sdB = q1.blkCd <= 0 && q1.gd >= 30; }
+        { const q0 = sm.f[0], q1 = sm.f[1]; g.spA = Math.round(q0.sp); g.spB = Math.round(q1.sp); g.gdA = Math.max(0, Math.min(100, Math.round(q0.gd))); g.gdB = Math.max(0, Math.min(100, Math.round(q1.gd))); g.sdA = q0.blkCd <= 0 && q0.gd >= 30; g.sdB = q1.blkCd <= 0 && q1.gd >= 30; }
         const sec = Math.max(0, Math.ceil(sm.roundT / 30));
         g.timerTxt = sm.phase === "fight" ? "0:" + (sec < 10 ? "0" : "") + sec : "";
         sm.proj = sm.proj.filter(q => {
@@ -1648,6 +1649,7 @@ PanelWindow {
                 readonly property real hp: index === 0 ? ar.g.hpA : ar.g.hpB
                 readonly property var wp: index === 0 ? ar.g.wa : ar.g.wb
                 readonly property real sp: index === 0 ? ar.g.spA : ar.g.spB
+                readonly property real gd: index === 0 ? ar.g.gdA : ar.g.gdB
                 readonly property bool sdOk: index === 0 ? ar.g.sdA : ar.g.sdB
                 x: index === 0 ? 20 : 900 - width - 20
                 y: 14
@@ -1664,11 +1666,11 @@ PanelWindow {
                         Behavior on width { NumberAnimation { duration: 300 } }
                     }
                 }
-                // super meter (fills from hits dealt and taken; gold + pulsing when ready) and the shield-ready icon
+                // super meter (fills from hits dealt and taken; gold + pulsing when ready)
                 Rectangle {
                     visible: ar.g.superOn
-                    x: hud.index === 0 ? 10 : 10 + (ar.g.shieldOn ? 22 : 0); y: 40
-                    width: hud.width - 20 - (ar.g.shieldOn ? 22 : 0); height: 5; color: ar.cSunken
+                    x: hud.index === 0 ? 10 : 10 + (ar.g.shieldOn ? 48 : 0); y: 40
+                    width: hud.width - 20 - (ar.g.shieldOn ? 48 : 0); height: 5; color: ar.cSunken
                     Rectangle {
                         x: hud.index === 1 ? parent.width - width : 0
                         width: parent.width * hud.sp / 100; height: parent.height
@@ -1677,11 +1679,19 @@ PanelWindow {
                         SequentialAnimation on opacity { running: hud.sp >= 100; loops: Animation.Infinite; NumberAnimation { to: 0.45; duration: 250 } NumberAnimation { to: 1; duration: 250 } }
                     }
                 }
+                // shield meter (cyan; bright when ready to block, dim on cooldown / low guard)
                 Rectangle {
                     visible: ar.g.shieldOn
-                    x: hud.index === 0 ? hud.width - 10 - width : 10; y: 38
-                    width: 16; height: 9; color: hud.sdOk ? "#7fe0ff" : "transparent"; border.width: 1; border.color: "#7fe0ff"; opacity: hud.sdOk ? 1 : 0.4
-                    radius: 3
+                    x: hud.index === 0 ? hud.width - 10 - width : 10; y: 40
+                    width: 40; height: 5; color: ar.cSunken
+                    border.width: 1; border.color: hud.sdOk ? "#7fe0ff" : "#3a6070"
+                    Rectangle {
+                        x: hud.index === 1 ? parent.width - width : 0
+                        width: parent.width * Math.max(0, Math.min(1, hud.gd / 100)); height: parent.height
+                        color: hud.gd < 30 ? "#ff8a3d" : "#7fe0ff"
+                        opacity: hud.sdOk ? 1 : 0.45
+                        Behavior on width { NumberAnimation { duration: 120 } }
+                    }
                 }
                 Rectangle {
                     x: hud.index === 0 ? 0 : hud.width - width; y: hud.height + 3

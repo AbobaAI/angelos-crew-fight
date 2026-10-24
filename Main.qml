@@ -64,6 +64,8 @@ Item {
     property string lastResult: ""
     property real spA: 0
     property real spB: 0
+    property real gdA: 100
+    property real gdB: 100
     property bool sdA: true
     property bool sdB: true
     readonly property string lang: langSetting === "ru" || langSetting === "en" ? langSetting : (Config.appearance.language === "en" ? "en" : "ru")
@@ -315,7 +317,7 @@ Item {
         wa = weapon(ka); wb = weapon(kb); lastHit = "";
         rounds = rr === undefined ? defRounds : parseRounds(rr);
         round = 0; phase = "intro"; timerTxt = ""; scoreTxt = "0 : 0"; finText = ""; say = ""; sayL = ""; sayR = "";
-        a = x; b = y; hpA = 100; hpB = 100; spA = 0; spB = 0; sdA = true; sdB = true; lastResult = ""; caption = ""; combo = 0; ko = false;
+        a = x; b = y; hpA = 100; hpB = 100; spA = 0; spB = 0; gdA = 100; gdB = 100; sdA = true; sdB = true; lastResult = ""; caption = ""; combo = 0; ko = false;
         banner = "";
         picking = false;
         matchWinner = -1;
