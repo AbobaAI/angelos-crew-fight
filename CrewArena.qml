@@ -54,7 +54,7 @@ PanelWindow {
                  "face": side === 0 ? 1 : -1, "st": "enter", "t": 0, "cd": 20, "flash": 0, "trail": [], "coat": g.coat(who.id),
                  "img": who.avatar ? "file://" + who.avatar : "", "hp": 100, "squash": 0, "wep": side === 0 ? g.wa : g.wb,
                  "stun": 0, "mv": null, "noWep": false, "alpha": 1, "low": false, "spin": 0,
-                 "blkAge": 99, "blkCd": 0, "gd": 100, "bflash": 0, "seen": 0, "atkN": 0, "sp": 0, "spd": 0, "mvT": 0, "tgt": null, "fetchT": 0, "bomb": null, "fled": 0 };
+                 "blkAge": 99, "blkCd": 0, "gd": 100, "bflash": 0, "seen": 0, "atkN": 0, "sp": 0, "supHold": 0, "spd": 0, "mvT": 0, "tgt": null, "fetchT": 0, "bomb": null, "fled": 0 };
     }
     Component.onCompleted: {
         sm = { "f": [mkF(g.a, 0), mkF(g.b, 1)], "mvStat": { "m": 0, "r": 0 }, "parts": [], "floats": [], "proj": [], "beams": [], "rings": [], "shake": 0, "slow": 1, "slowT": 0,
@@ -138,7 +138,7 @@ PanelWindow {
         if (g.shieldOn && def.st === "block") { blocked(att, def, dmg, crit, mv, wp, hx, hy); return; }
         sm.st.hits[att.side]++;
         if (mv.sp) sm.st.supHit[att.side] += dmg;
-        else { const dm = Math.min(1.3, mv.dm || 1); addSp(att, 6 + 7 * dm); addSp(def, 5 + 5 * dm); }
+        else { const dm = Math.min(1.3, mv.dm || 1); addSp(att, 4 + 4.5 * dm); addSp(def, 2.5 + 2.5 * dm); }   // attacker earns more; taking hits fills slowly (~½ of old)
         def.hp = Math.max(0, def.hp - dmg);
         hitSound(wp, mv, crit);
         sm.dmg[att.side] += dmg;
@@ -195,7 +195,7 @@ PanelWindow {
         att.vx = -att.face * (perfect ? 7 : 3);
         def.gd -= sup ? 120 : 14 + dmg * 0.8;
         sm.st.blk[def.side]++;
-        if (sup) sm.st.supHit[att.side] += d; else { addSp(def, perfect ? 12 : 5); addSp(att, 3); }
+        if (sup) sm.st.supHit[att.side] += d; else { addSp(def, perfect ? 7 : 3); addSp(att, 2); }
         g.sfx(perfect ? "parry" : "block", 0.9);
         g.sfx(hitSfx[wp.id] || "punch", 0.25);
         sm.freeze = Math.max(sm.freeze, perfect ? 4 : 2);
@@ -547,11 +547,24 @@ PanelWindow {
         case "idle": {
             f.cd -= dt;
             if (sm.items.length) { const bb = bombNear(f); if (bb && f.fled !== bb.id) { f.fled = bb.id; if (Math.random() < 0.85) { f.st = "flee"; f.bomb = bb; break; } } }
-            if (g.shieldOn && tryBlock(f, e, dist, dt)) break;
+            // spend a full meter before blocking/attacking — otherwise tryBlock eats the decision window
             if (g.superOn && f.sp >= 100 && f.cd <= 0 && !f.noWep) {
                 const smv = f.superMv || (f.superMv = superOf(wp));
-                if ((!smv.lunge || dist < 430) && Math.random() < 0.5) { startMove(f, smv); break; }
+                // one roll per attack slot (was 50% every slot → dump ASAP); ~28% and climbs if we keep passing
+                const reach = smv.lunge ? 240 : 310;
+                if (dist <= reach) {
+                    f.supHold = (f.supHold || 0) + 1;
+                    const want = 0.28 + Math.min(0.35, (f.supHold - 1) * 0.12)
+                        + (e.st === "hurt" || e.stun > 0 ? 0.25 : 0)
+                        + (e.hp < 35 ? 0.15 : 0)
+                        + (f.hp < 40 ? 0.1 : 0);
+                    if (Math.random() < want) { f.supHold = 0; startMove(f, smv); break; }
+                } else {
+                    f.supHold = 0;
+                    if (smv.lunge && dist < 420 && Math.random() < 0.4) { f.st = "dash"; break; }
+                }
             }
+            if (g.shieldOn && tryBlock(f, e, dist, dt)) break;
             if (f.cd <= 0 && sm.items.length) { const it = pickTarget(f, e); if (it) { f.st = "fetch"; f.tgt = it; f.fetchT = 0; break; } }
             const mr = Math.min(wp.range, 104);                     // melee reach (mic/laser too: bonk / butt bash)
             if (f.cd > 0) { if (dist > mr + 40 && Math.random() < 0.04 * dt) f.st = "dash"; break; }
