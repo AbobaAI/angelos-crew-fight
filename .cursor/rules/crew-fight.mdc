@@ -1,0 +1,5 @@
+---
+description: Правила проекта crew-fight
+alwaysApply: true
+---
+Перед работой прочитай @HANDOFF.md. Отвечай по-русски коротко. Перед деплоем делай бэкап live-плагина ~/.config/angelos/plugins/crew-fight, после деплоя запускай ~/.config/quickshell/angelos/bin/angelos restart и проверяй journalctl. План: щит → супер → предметы → арены (в конце). Без git push/PR/релизов без явного согласия пользователя. Без sudo и kill.
