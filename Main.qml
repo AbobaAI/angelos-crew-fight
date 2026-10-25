@@ -472,7 +472,7 @@ Item {
     property string wpB: "random"
     property int pickRounds: 1
     property string pickShot: ""
-    Timer { running: root.picking; interval: 45000; onTriggered: root.picking = false }
+    property string pickHall: ""
     function openPicker() {
         if (!live) return "stale copy";
         first = null; second = null; wpA = "random"; wpB = "random";
@@ -536,13 +536,14 @@ Item {
         function snap(ev: string, dir: string): string { root.snapEv = ev; root.snapDir = dir; return "snap " + ev + " -> " + dir; }
         function turbo(n: string): string { root.turbo = Math.max(1, Math.min(60, parseInt(n) || 1)); return "turbo " + root.turbo; }
         // test helper (not in the README): open the picker on demo fighters and save the card
-        function pickShot(path: string): string {
+        function pickShot(path: string, hall: string): string {
             const r = root.openPicker();
             root.pickDemo = true;
             root.first = root.fakes[0];
             root.second = root.fakes[1];
             root.wpA = "fists";
             root.wpB = "slipper";
+            root.pickHall = String(hall || "");
             root.pickShot = String(path || "");
             return r + " shot";
         }

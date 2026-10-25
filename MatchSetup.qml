@@ -46,10 +46,11 @@ PanelWindow {
     property string arenaId: game.arenaPick
     property bool moreOpen: false
 
-    property color arenaSky: "#2b2433"
-    property color arenaGround: "#5a3a28"
-    property color arenaMark: "#e04848"
+    property int aIdx: 0
+    property int bIdx: 1
+    property bool showB: false
     property real bob: 0
+    property real flake: 0
     property real faceScale: 1
     property real hallScale: 1
     property real dimIn: 0
@@ -62,18 +63,12 @@ PanelWindow {
     property var tipItem: null
     property bool shotDone: false
 
-    function paintArena(id) {
-        var sky = "#2b2433"
-        var ground = "#5a3a28"
-        var mark = "#e04848"
-        if (id === "dojo") { sky = "#3a241c"; ground = "#cbb98a"; mark = "#f4a0b8" }
-        else if (id === "desert") { sky = "#6a4018"; ground = "#e0b060"; mark = "#ffd34d" }
-        else if (id === "fjord") { sky = "#163040"; ground = "#d7f1fb"; mark = "#ffffff" }
-        else if (id === "plaza") { sky = "#4a2040"; ground = "#8a7560"; mark = "#ffd34d" }
-        else if (id === "terem") { sky = "#1c3050"; ground = "#eef4fb"; mark = "#8b3030" }
-        arenaSky = sky
-        arenaGround = ground
-        arenaMark = mark
+    function hallAt(i) {
+        if (i === 1) return "desert"
+        if (i === 2) return "fjord"
+        if (i === 3) return "plaza"
+        if (i === 4) return "terem"
+        return "dojo"
     }
     function arenaName(id) {
         if (id === "dojo") return game.t("додзё", "dojo")
@@ -176,9 +171,12 @@ PanelWindow {
         tipY = y
     }
 
-    onArenaIdChanged: paintArena(arenaId)
+    function applyShotHall() {
+        if (game.pickShot !== "" && game.pickHall !== "")
+            arenaId = game.pickHall
+    }
     Component.onCompleted: {
-        paintArena(arenaId)
+        applyShotHall()
         dimIn = 1
         cardIn = 1
         keys.forceActiveFocus()
@@ -191,7 +189,9 @@ PanelWindow {
         function onPickShotChanged() {
             if (win.game.pickShot !== "")
                 win.shotDone = false
+            win.applyShotHall()
         }
+        function onPickHallChanged() { win.applyShotHall() }
     }
 
     SequentialAnimation {
@@ -200,6 +200,27 @@ PanelWindow {
         loops: Animation.Infinite
         NumberAnimation { target: win; property: "bob"; to: 1; duration: 700; easing.type: Easing.InOutQuad }
         NumberAnimation { target: win; property: "bob"; to: 0; duration: 700; easing.type: Easing.InOutQuad }
+    }
+    SequentialAnimation {
+        id: flakeAnim
+        running: !win.ecoOn
+        loops: Animation.Infinite
+        NumberAnimation { target: win; property: "flake"; to: 1; duration: 3200; easing.type: Easing.Linear }
+        PropertyAction { target: win; property: "flake"; value: 0 }
+    }
+    Timer {
+        interval: 1500
+        repeat: true
+        running: win.arenaId === "random" && !win.ecoOn
+        onTriggered: {
+            if (win.showB) {
+                win.aIdx = win.bIdx < 4 ? win.bIdx + 1 : 0
+                win.showB = false
+            } else {
+                win.bIdx = win.aIdx < 4 ? win.aIdx + 1 : 0
+                win.showB = true
+            }
+        }
     }
     SequentialAnimation {
         id: facePulse
@@ -213,7 +234,7 @@ PanelWindow {
     }
     Timer {
         id: tipDelay
-        interval: 380
+        interval: 700
         onTriggered: {
             if (!win.tipItem) return
             win.placeTip()
@@ -235,6 +256,7 @@ PanelWindow {
             cardHost.grabToImage(function (res) {
                 if (res) res.saveToFile(path)
                 console.info("crew-fight picker shot " + path)
+                win.game.pickHall = ""
                 win.game.pickShot = ""
                 shotClose.start()
             })
@@ -244,6 +266,110 @@ PanelWindow {
         sequences: ["Escape"]
         enabled: win.game.picking
         onActivated: win.game.picking = false
+    }
+
+    component HallThumb: Item {
+        id: hall
+        property string kind: "dojo"
+        property real flake: 0
+        property bool quiet: false
+        width: Theme.u * 52
+        height: Theme.u * 34
+        clip: true
+
+        readonly property color sky: kind === "desert" ? "#e09048" : kind === "fjord" ? "#163040" : kind === "plaza" ? "#4a2040" : kind === "terem" ? "#1c3050" : "#3a241c"
+        readonly property bool petals: !quiet && (kind === "dojo" || kind === "desert" || kind === "fjord" || kind === "terem")
+        readonly property color speck: kind === "dojo" ? "#f4a0b8" : kind === "desert" ? "#f0d090" : "#ffffff"
+
+        Rectangle { anchors.fill: parent; color: hall.sky }
+        Rectangle {
+            visible: hall.kind === "dojo"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Theme.u * 10
+            color: "#cbb98a"
+        }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 18; width: Theme.u; height: Theme.u * 10; anchors.bottom: parent.bottom; color: "#7f9348" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 34; width: Theme.u; height: Theme.u * 10; anchors.bottom: parent.bottom; color: "#7f9348" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 2; y: Theme.u * 6; width: Theme.u * 12; height: Theme.u * 16; color: "#f3e2c4"; border.width: Theme.u; border.color: "#5a3a28" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 2; y: Theme.u * 13; width: Theme.u * 12; height: Theme.u; color: "#c4a882" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 7; y: Theme.u * 6; width: Theme.u; height: Theme.u * 16; color: "#c4a882" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 16; y: Theme.u * 4; width: Theme.u * 18; height: Theme.u * 2; color: "#5a3a28" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 18; y: Theme.u * 2; width: Theme.u * 3; height: Theme.u * 3; color: "#f4a0b8" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 24; y: Theme.u * 5; width: Theme.u * 3; height: Theme.u * 3; color: "#ffd0dc" }
+        Rectangle { visible: hall.kind === "dojo"; x: Theme.u * 30; y: Theme.u * 2; width: Theme.u * 3; height: Theme.u * 3; color: "#f4a0b8" }
+
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 40; y: Theme.u * 3; width: Theme.u * 6; height: Theme.u * 6; color: "#ffd34d" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 42; y: Theme.u * 5; width: Theme.u * 2; height: Theme.u * 2; color: "#fff2a8" }
+        Rectangle { visible: hall.kind === "desert"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 10; color: "#e0b060" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 2; anchors.bottom: parent.bottom; anchors.bottomMargin: Theme.u * 8; width: Theme.u * 16; height: Theme.u * 3; color: "#c4922a" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 14; y: Theme.u * 22; width: Theme.u * 24; height: Theme.u * 3; color: "#e0c080" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 26; y: Theme.u * 22; width: Theme.u * 12; height: Theme.u * 3; color: "#a07838" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 17; y: Theme.u * 19; width: Theme.u * 18; height: Theme.u * 3; color: "#e0c080" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 26; y: Theme.u * 19; width: Theme.u * 9; height: Theme.u * 3; color: "#a07838" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 20; y: Theme.u * 16; width: Theme.u * 12; height: Theme.u * 3; color: "#e0c080" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 26; y: Theme.u * 16; width: Theme.u * 6; height: Theme.u * 3; color: "#a07838" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 23; y: Theme.u * 13; width: Theme.u * 6; height: Theme.u * 3; color: "#e0c080" }
+        Rectangle { visible: hall.kind === "desert"; x: Theme.u * 26; y: Theme.u * 13; width: Theme.u * 3; height: Theme.u * 3; color: "#a07838" }
+
+        Rectangle { visible: hall.kind === "fjord"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 8; color: "#d7f1fb" }
+        Rectangle { visible: hall.kind === "fjord"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.bottomMargin: Theme.u * 7; height: Theme.u * 2; color: "#ffffff" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 2; y: Theme.u * 18; width: Theme.u * 18; height: Theme.u * 8; color: "#3a5060" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 5; y: Theme.u * 14; width: Theme.u * 12; height: Theme.u * 4; color: "#3a5060" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 8; y: Theme.u * 11; width: Theme.u * 6; height: Theme.u * 3; color: "#f4fbff" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 22; y: Theme.u * 16; width: Theme.u * 26; height: Theme.u * 10; color: "#2c4254" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 27; y: Theme.u * 11; width: Theme.u * 16; height: Theme.u * 5; color: "#2c4254" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 31; y: Theme.u * 7; width: Theme.u * 8; height: Theme.u * 4; color: "#f4fbff" }
+
+        Rectangle { visible: hall.kind === "plaza"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 10; color: "#cbb8a0" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 4; y: Theme.u * 26; width: Theme.u; height: Theme.u * 8; color: "#8a7560" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 18; y: Theme.u * 26; width: Theme.u; height: Theme.u * 8; color: "#8a7560" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 32; y: Theme.u * 26; width: Theme.u; height: Theme.u * 8; color: "#8a7560" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 4; y: Theme.u * 6; width: Theme.u * 44; height: Theme.u; color: "#2b2433" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 6; y: Theme.u * 7; width: Theme.u * 5; height: Theme.u * 4; color: "#e8668b" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 14; y: Theme.u * 7; width: Theme.u * 5; height: Theme.u * 4; color: "#ffd34d" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 22; y: Theme.u * 7; width: Theme.u * 5; height: Theme.u * 4; color: "#5dd6c0" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 30; y: Theme.u * 7; width: Theme.u * 5; height: Theme.u * 4; color: "#f08a5d" }
+        Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 38; y: Theme.u * 7; width: Theme.u * 5; height: Theme.u * 4; color: "#b48cf0" }
+
+        Rectangle { visible: hall.kind === "terem"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 8; color: "#eef4fb" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 14; y: Theme.u * 16; width: Theme.u * 24; height: Theme.u * 12; color: "#f4e4c4"; border.width: Theme.u; border.color: "#6b3a2a" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 18; y: Theme.u * 20; width: Theme.u * 5; height: Theme.u * 8; color: "#6b3a2a" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 28; y: Theme.u * 18; width: Theme.u * 5; height: Theme.u * 4; color: "#ffd34d" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 12; y: Theme.u * 14; width: Theme.u * 28; height: Theme.u * 3; color: "#8b3030" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 12; y: Theme.u * 13; width: Theme.u * 28; height: Theme.u; color: "#ffffff" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 16; y: Theme.u * 11; width: Theme.u * 20; height: Theme.u * 3; color: "#8b3030" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 16; y: Theme.u * 10; width: Theme.u * 20; height: Theme.u; color: "#ffffff" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 20; y: Theme.u * 8; width: Theme.u * 12; height: Theme.u * 3; color: "#8b3030" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 20; y: Theme.u * 7; width: Theme.u * 12; height: Theme.u; color: "#ffffff" }
+        Rectangle { visible: hall.kind === "terem"; x: Theme.u * 24; y: Theme.u * 5; width: Theme.u * 4; height: Theme.u * 3; color: "#8b3030" }
+
+        Rectangle {
+            visible: hall.petals
+            width: Theme.u * 2
+            height: Theme.u * 2
+            color: hall.speck
+            x: Theme.u * 10
+            y: ((hall.flake + 0.12) % 1) * (hall.height - Theme.u * 2)
+        }
+        Rectangle {
+            visible: hall.petals
+            width: Theme.u * 2
+            height: Theme.u * 2
+            color: hall.speck
+            x: Theme.u * 36
+            y: ((hall.flake + 0.48) % 1) * (hall.height - Theme.u * 2)
+        }
+        Rectangle {
+            visible: hall.petals
+            width: Theme.u
+            height: Theme.u
+            color: hall.speck
+            x: Theme.u * 22
+            y: ((hall.flake + 0.77) % 1) * (hall.height - Theme.u)
+        }
+        Rectangle { anchors.fill: parent; color: "transparent"; border.width: Theme.u; border.color: Theme.edge }
     }
 
     component FaceCard: Column {
@@ -469,7 +595,7 @@ PanelWindow {
                                 spacing: Theme.u * 3
                                 Item {
                                     width: Theme.u * 44
-                                    height: Theme.u * 40
+                                    height: Theme.u * 50
                                     FaceCard {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         anchors.bottom: parent.bottom
@@ -484,7 +610,7 @@ PanelWindow {
                                 }
                                 Item {
                                     width: vsText.implicitWidth
-                                    height: Theme.u * 40
+                                    height: Theme.u * 50
                                     PxText {
                                         id: vsText
                                         anchors.centerIn: parent
@@ -495,7 +621,7 @@ PanelWindow {
                                 }
                                 Item {
                                     width: Theme.u * 44
-                                    height: Theme.u * 40
+                                    height: Theme.u * 50
                                     FaceCard {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         anchors.bottom: parent.bottom
@@ -509,42 +635,44 @@ PanelWindow {
                                     }
                                 }
                                 Item {
-                                    width: Theme.u * 40
-                                    height: Theme.u * 40
+                                    width: Theme.u * 52
+                                    height: Theme.u * 50
                                     Column {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         anchors.bottom: parent.bottom
                                         spacing: Theme.u
                                         scale: win.hallScale
                                         transformOrigin: Item.Bottom
-                                        Rectangle {
-                                            id: swatch
-                                            width: Theme.u * 36
-                                            height: Theme.u * 20
-                                            color: win.arenaSky
-                                            border.width: Theme.u
-                                            border.color: Theme.edge
-                                            Behavior on color { ColorAnimation { duration: win.anim } }
-                                            Rectangle {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.bottom: parent.bottom
-                                                anchors.margins: Theme.u
-                                                height: parent.height * 0.38
-                                                color: win.arenaGround
-                                                Behavior on color { ColorAnimation { duration: win.anim } }
+                                        Item {
+                                            width: Theme.u * 52
+                                            height: Theme.u * 34
+                                            HallThumb {
+                                                anchors.fill: parent
+                                                kind: win.arenaId === "random" ? win.hallAt(win.aIdx) : win.arenaId
+                                                flake: win.flake
+                                                quiet: win.ecoOn
+                                                opacity: win.arenaId !== "random" || win.ecoOn || !win.showB ? 1 : 0
+                                                Behavior on opacity { NumberAnimation { duration: win.anim > 1 ? 450 : 1 } }
                                             }
-                                            Rectangle {
-                                                width: Theme.u * 3
-                                                height: Theme.u * 5
-                                                y: Theme.u * 3
-                                                x: Theme.u * 4 + (win.ecoOn ? 0 : win.bob * Theme.u * 16)
-                                                color: win.arenaMark
-                                                Behavior on color { ColorAnimation { duration: win.anim } }
+                                            HallThumb {
+                                                anchors.fill: parent
+                                                kind: win.hallAt(win.bIdx)
+                                                flake: win.flake
+                                                quiet: win.ecoOn
+                                                visible: win.arenaId === "random" && !win.ecoOn
+                                                opacity: win.showB ? 1 : 0
+                                                Behavior on opacity { NumberAnimation { duration: win.anim > 1 ? 450 : 1 } }
+                                            }
+                                            PxText {
+                                                anchors.centerIn: parent
+                                                visible: win.arenaId === "random" && win.ecoOn
+                                                text: "?"
+                                                color: Theme.text
+                                                font.bold: true
                                             }
                                         }
                                         PxText {
-                                            width: Theme.u * 40
+                                            width: Theme.u * 52
                                             horizontalAlignment: Text.AlignHCenter
                                             elide: Text.ElideRight
                                             kind: "tiny"
