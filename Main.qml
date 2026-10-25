@@ -471,6 +471,7 @@ Item {
     property string wpA: "random"
     property string wpB: "random"
     property int pickRounds: 1
+    property string pickShot: ""
     Timer { running: root.picking; interval: 45000; onTriggered: root.picking = false }
     function openPicker() {
         if (!live) return "stale copy";
@@ -534,6 +535,17 @@ Item {
         function spawn(kind: string): string { root.dbgSpawn = kind || "heal"; return "spawn " + kind; }
         function snap(ev: string, dir: string): string { root.snapEv = ev; root.snapDir = dir; return "snap " + ev + " -> " + dir; }
         function turbo(n: string): string { root.turbo = Math.max(1, Math.min(60, parseInt(n) || 1)); return "turbo " + root.turbo; }
+        // test helper (not in the README): open the picker on demo fighters and save the card
+        function pickShot(path: string): string {
+            const r = root.openPicker();
+            root.pickDemo = true;
+            root.first = root.fakes[0];
+            root.second = root.fakes[1];
+            root.wpA = "fists";
+            root.wpB = "slipper";
+            root.pickShot = String(path || "");
+            return r + " shot";
+        }
         // sound: on | off | toggle ; volume: 0-100 (persisted)
         function sound(state: string): string { return root.setSound(state === "toggle" ? !root.soundOn : state !== "off" && state !== "0"); }
         function volume(v: string): string { return root.setSound(undefined, parseInt(v) || 0); }
@@ -568,136 +580,9 @@ Item {
         TourBracket { game: root }
     }
 
-    // ── picker: click two people
+    // ── picker: fighters, weapons, arena (MatchSetup.qml)
     LazyLoader {
         active: root.picking
-        PanelWindow {
-            screen: Shell.focusedScreen || Shell.primaryScreen
-            anchors { top: true; bottom: true; left: true; right: true }
-            exclusionMode: ExclusionMode.Ignore
-            color: "#66000000"
-            WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-            WlrLayershell.namespace: "angelos-crew-fight-picker"
-            MouseArea { anchors.fill: parent; onClicked: root.picking = false }
-            Item {
-                anchors.fill: parent
-                focus: true
-                Keys.onEscapePressed: root.picking = false
-            }
-            Rectangle {
-                id: card
-                anchors.centerIn: parent
-                readonly property var pool: root.pickDemo ? root.fakes : root.people
-                width: Theme.u * 300
-                height: col.implicitHeight + Theme.u * 16
-                color: Theme.face; border.width: Theme.u; border.color: Theme.accent
-                MouseArea { anchors.fill: parent }
-                Column {
-                    id: col
-                    x: Theme.u * 8; y: Theme.u * 8; width: parent.width - Theme.u * 16
-                    spacing: Theme.u * 3
-                    PxText { text: root.t("⚔ Драка человечков", "⚔ Crew Fight"); color: Theme.accent; font.bold: true }
-                    PxText {
-                        width: parent.width; wrapMode: Text.Wrap; color: Theme.textDim
-                        text: (root.pickDemo ? (root.crewHint || root.t("Демо-бойцы.", "Demo fighters.")) + " " : "") + (!root.first ? root.t("Выбери первого бойца", "Pick the first fighter") : !root.second ? root.t("Против кого " + root.first.name + "?", "Who fights " + root.first.name + "?") : root.t("Выбери оружие и жми «В бой!»", "Pick weapons and hit “Fight!”"))
-                    }
-                    Repeater {
-                        model: card.pool
-                        Rectangle {
-                            id: row
-                            required property var modelData
-                            readonly property bool sel: (root.first && root.first.id === modelData.id) || (root.second && root.second.id === modelData.id)
-                            width: col.width; height: Theme.u * 18
-                            color: sel ? Theme.accent : ma.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
-                            border.width: Theme.u; border.color: Qt.darker(root.coat(modelData.id), 1.4)
-                            Rectangle {
-                                x: Theme.u * 3; anchors.verticalCenter: parent.verticalCenter
-                                width: Theme.u * 12; height: width; color: root.coat(row.modelData.id)
-                                Image { anchors.fill: parent; source: row.modelData.avatar ? "file://" + row.modelData.avatar : ""; smooth: false; fillMode: Image.PreserveAspectCrop }
-                            }
-                            PxText { x: Theme.u * 20; anchors.verticalCenter: parent.verticalCenter; text: row.modelData.name; color: row.sel ? Theme.face : Theme.text }
-                            MouseArea {
-                                id: ma; anchors.fill: parent; hoverEnabled: true
-                                onClicked: {
-                                    const id = row.modelData.id;
-                                    if (root.first && root.first.id === id) { root.first = root.second; root.second = null; root.wpA = root.wpB; root.wpB = "random"; }
-                                    else if (root.second && root.second.id === id) root.second = null;
-                                    else if (!root.first) root.first = row.modelData;
-                                    else root.second = row.modelData;
-                                }
-                            }
-                        }
-                    }
-                    Row {
-                        spacing: Theme.u * 2
-                        PxText { anchors.verticalCenter: parent.verticalCenter; text: root.t("Раунды:", "Rounds:"); color: Theme.textDim }
-                        Repeater {
-                            model: [[1, "1"], [3, "3"], [5, "5"], [0, root.t("до нокаута", "to KO")]]
-                            Rectangle {
-                                id: rch
-                                required property var modelData
-                                readonly property bool on: root.pickRounds === modelData[0]
-                                width: rt.implicitWidth + Theme.u * 8; height: Theme.u * 14
-                                color: on ? Theme.accent : rma.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
-                                border.width: Theme.u; border.color: Theme.accent
-                                PxText { id: rt; anchors.centerIn: parent; text: rch.modelData[1]; color: rch.on ? Theme.face : Theme.text }
-                                MouseArea { id: rma; anchors.fill: parent; hoverEnabled: true; onClicked: root.pickRounds = rch.modelData[0] }
-                            }
-                        }
-                    }
-                    // a weapon row per chosen fighter
-                    Repeater {
-                        model: [root.first, root.second].filter(x => !!x).length
-                        Column {
-                            id: wrow
-                            required property int index
-                            readonly property var who: index === 0 ? root.first : root.second
-                            readonly property string cur: index === 0 ? root.wpA : root.wpB
-                            width: col.width
-                            spacing: Theme.u
-                            PxText { text: root.t("Оружие: ", "Weapon: ") + (wrow.who ? wrow.who.name : ""); color: Theme.textDim }
-                            Flow {
-                                width: col.width
-                                spacing: Theme.u * 2
-                                Repeater {
-                                    model: ["random"].concat(root.weapons.map(w => w.id))
-                                    Rectangle {
-                                        id: chip
-                                        required property string modelData
-                                        readonly property var wp: root.weapons.find(w => w.id === modelData)
-                                        readonly property bool on: wrow.cur === modelData
-                                        width: chipRow.implicitWidth + Theme.u * 6; height: Theme.u * 14
-                                        color: on ? Theme.accent : chipMa.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
-                                        border.width: Theme.u; border.color: Theme.accent
-                                        Row {
-                                            id: chipRow
-                                            anchors.centerIn: parent
-                                            spacing: Theme.u * 2
-                                            Rectangle {
-                                                anchors.verticalCenter: parent.verticalCenter; visible: !!chip.wp
-                                                width: Theme.u * 12; height: Theme.u * 12; color: "#2b2433"; border.width: chip.on ? 1 : 0; border.color: "#ffffff"
-                                                PxIcon { anchors.centerIn: parent; bitmap: chip.wp ? chip.wp.bmp : null; exactPixel: Theme.u * 10 / Math.max(5, chip.wp ? chip.wp.bmp.length : 5); palette: root.wpal }
-                                            }
-                                            PxText { anchors.verticalCenter: parent.verticalCenter; text: chip.wp ? chip.wp.name : root.t("🎲 случайное", "🎲 random"); color: chip.on ? Theme.face : Theme.text }
-                                        }
-                                        MouseArea { id: chipMa; anchors.fill: parent; hoverEnabled: true; onClicked: { if (wrow.index === 0) root.wpA = chip.modelData; else root.wpB = chip.modelData; } }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Row {
-                        spacing: Theme.u * 4
-                        PxButton { text: root.t("В бой!", "Fight!"); accent: true; visible: !!root.second; onClicked: root.start(root.first, root.second, root.wpA, root.wpB, String(root.pickRounds)) }
-                        PxButton { text: root.t("Случайно", "Random"); onClicked: { const p = root.randomPair(card.pool); if (p) root.start(p[0], p[1], "random", "random", String(root.pickRounds)); } }
-                        PxButton { text: root.pickDemo ? root.t("Звонок", "Call") : root.t("Демо", "Demo"); onClicked: { root.first = null; root.second = null; root.pickDemo = !root.pickDemo; } }
-                        PxButton { text: root.t("Турнир", "Tournament"); onClicked: root.startTour(card.pool, "1", root.pickDemo) }
-                        PxButton { text: root.soundOn ? "🔊" : "🔇"; onClicked: root.setSound(!root.soundOn) }
-                        PxButton { text: root.t("Отмена", "Cancel"); onClicked: root.picking = false }
-                    }
-                }
-            }
-        }
+        MatchSetup { game: root }
     }
 }
