@@ -492,9 +492,26 @@ Item {
         wpA = "random";
         wpB = "random";
     }
+    function addDeskBot() {
+        var i, bot = null, ida = Desk.a ? Desk.a.id : "", idb = Desk.b ? Desk.b.id : "";
+        if (!live || (ida && idb))
+            return;
+        for (i = 0; i < fakes.length; i++)
+            if (fakes[i].id !== ida && fakes[i].id !== idb) {
+                bot = fakes[i];
+                break;
+            }
+        if (!bot)
+            return;
+        if (!ida)
+            Desk.put(0, bot);
+        else
+            Desk.put(1, bot);
+    }
     Connections {
         target: Desk
         function onFightAsked() { root.openFromDesk(); }
+        function onBotAsked() { root.addDeskBot(); }
     }
 
     IpcHandler {

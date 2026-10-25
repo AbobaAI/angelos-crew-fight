@@ -11,6 +11,7 @@ QtObject {
     property var a: null
     property var b: null
     signal fightAsked()
+    signal botAsked()
 
     function put(slot, who) {
         if (!who || !who.id)
@@ -34,5 +35,8 @@ QtObject {
     function ask() {
         if (a && b && a.id !== b.id)
             fightAsked();
+    }
+    function askBot() {
+        botAsked();
     }
 }
