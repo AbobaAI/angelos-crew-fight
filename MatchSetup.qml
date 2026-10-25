@@ -277,7 +277,7 @@ PanelWindow {
         height: Theme.u * 34
         clip: true
 
-        readonly property color sky: kind === "desert" ? "#e09048" : kind === "fjord" ? "#163040" : kind === "plaza" ? "#4a2040" : kind === "terem" ? "#1c3050" : "#3a241c"
+        readonly property color sky: kind === "desert" ? "#e09048" : kind === "fjord" ? "#0e2034" : kind === "plaza" ? "#4a2040" : kind === "terem" ? "#1c3050" : "#3a241c"
         readonly property bool petals: !quiet && (kind === "dojo" || kind === "desert" || kind === "fjord" || kind === "terem")
         readonly property color speck: kind === "dojo" ? "#f4a0b8" : kind === "desert" ? "#f0d090" : "#ffffff"
 
@@ -313,14 +313,20 @@ PanelWindow {
         Rectangle { visible: hall.kind === "desert"; x: Theme.u * 23; y: Theme.u * 13; width: Theme.u * 6; height: Theme.u * 3; color: "#e0c080" }
         Rectangle { visible: hall.kind === "desert"; x: Theme.u * 26; y: Theme.u * 13; width: Theme.u * 3; height: Theme.u * 3; color: "#a07838" }
 
-        Rectangle { visible: hall.kind === "fjord"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 8; color: "#d7f1fb" }
-        Rectangle { visible: hall.kind === "fjord"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.bottomMargin: Theme.u * 7; height: Theme.u * 2; color: "#ffffff" }
-        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 2; y: Theme.u * 18; width: Theme.u * 18; height: Theme.u * 8; color: "#3a5060" }
-        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 5; y: Theme.u * 14; width: Theme.u * 12; height: Theme.u * 4; color: "#3a5060" }
-        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 8; y: Theme.u * 11; width: Theme.u * 6; height: Theme.u * 3; color: "#f4fbff" }
-        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 22; y: Theme.u * 16; width: Theme.u * 26; height: Theme.u * 10; color: "#2c4254" }
-        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 27; y: Theme.u * 11; width: Theme.u * 16; height: Theme.u * 5; color: "#2c4254" }
-        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 31; y: Theme.u * 7; width: Theme.u * 8; height: Theme.u * 4; color: "#f4fbff" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 10; y: Theme.u * 2; width: Theme.u * 24; height: Theme.u; color: "#5dffc0"; opacity: 0.85 }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 16; y: Theme.u * 4; width: Theme.u * 16; height: Theme.u; color: "#7ad0ff"; opacity: 0.7 }
+        Rectangle { visible: hall.kind === "fjord"; x: 0; y: Theme.u * 6; width: Theme.u * 8; height: Theme.u * 20; color: "#121c28" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 8; y: Theme.u * 10; width: Theme.u * 5; height: Theme.u * 16; color: "#1a2838" }
+        Rectangle { visible: hall.kind === "fjord"; x: 0; y: Theme.u * 6; width: Theme.u * 8; height: Theme.u * 2; color: "#f4fbff" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 44; y: Theme.u * 5; width: Theme.u * 8; height: Theme.u * 21; color: "#121c28" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 39; y: Theme.u * 9; width: Theme.u * 5; height: Theme.u * 17; color: "#1a2838" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 44; y: Theme.u * 5; width: Theme.u * 8; height: Theme.u * 2; color: "#f4fbff" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 11; y: Theme.u * 14; width: Theme.u * 4; height: Theme.u * 2; color: "#1e4a38" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 12; y: Theme.u * 12; width: Theme.u * 2; height: Theme.u * 2; color: "#245c44" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 12; y: Theme.u * 18; width: Theme.u * 28; height: Theme.u * 8; color: "#0c2436" }
+        Rectangle { visible: hall.kind === "fjord"; x: Theme.u * 18; y: Theme.u * 20; width: Theme.u * 6; height: Theme.u; color: "#8fd4ea" }
+        Rectangle { visible: hall.kind === "fjord"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 6; color: "#c5e8f6" }
+        Rectangle { visible: hall.kind === "fjord"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.bottomMargin: Theme.u * 5; height: Theme.u; color: "#ffffff" }
 
         Rectangle { visible: hall.kind === "plaza"; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Theme.u * 10; color: "#cbb8a0" }
         Rectangle { visible: hall.kind === "plaza"; x: Theme.u * 4; y: Theme.u * 26; width: Theme.u; height: Theme.u * 8; color: "#8a7560" }

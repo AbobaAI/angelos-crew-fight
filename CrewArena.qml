@@ -680,7 +680,7 @@ PanelWindow {
         switch (arenaId) {
         case "dojo": return "#3a241c";
         case "desert": return "#6a4018";
-        case "fjord": return "#163040";
+        case "fjord": return "#0a1828";
         case "plaza": return "#4a2040";
         case "terem": return "#1c3050";
         default: return "";
@@ -808,17 +808,7 @@ PanelWindow {
             px("#c4922a", 150, fy - 26, 170, 8);
             px("#c4922a", 530, fy - 24, 150, 8);
         } else if (id === "fjord") {
-            tri(150, 230, 100, "#3a5060", "#2a3c4a");
-            tri(390, 270, 140, "#2c4254", "#1e3040");
-            tri(650, 190, 88, "#4a6274", "#314858");
-            px("#f4fbff", 230, fy - 128, 36, 10);
-            px("#f4fbff", 490, fy - 168, 48, 12);
-            px("#f4fbff", 720, fy - 116, 28, 8);
-            px("#d7f1fb", L, fy - 16, R - L, 16);
-            px("#ffffff", L + 16, fy - 14, R - L - 32, 3);
-            for (let k = 0; k < 5; k++) px("#7eb0c8", L + 30 + k * 100, fy - 9, 16, 2);
-            px("#2a6a88", L - 16, fy + 6, R - L + 32, 14);
-            px("#7ec8e8", L + 10, fy + 10, 36, 3);
+            paintFjord(ctx, px, ww, fy, L, R);
         } else if (id === "plaza") {
             px("#2b2433", 36, 148, ww - 72, 2);
             const cols = ["#e8668b", "#ffd34d", "#5dd6c0", "#f08a5d", "#b48cf0", "#ffffff"];
@@ -857,6 +847,61 @@ PanelWindow {
             px("#ffb347", L + 90, fy - 40, 10, 6);
             px("#6b3a2a", L + 90, fy - 64, 10, 14);
         }
+    }
+    // fjord backdrop, painted once with the rest of the hall (not on the fight tick)
+    function paintFjord(ctx, px, ww, fy, L, R) {
+        var pine = function (x, y) {
+            px("#143028", x + 2, y - 34, 12, 6);
+            px("#1c4034", x, y - 26, 16, 6);
+            px("#24543e", x + 2, y - 18, 12, 6);
+            px("#2e6848", x + 4, y - 12, 8, 6);
+            px("#f4fbff", x + 4, y - 34, 6, 3);
+            px("#3a2a1c", x + 6, y - 8, 4, 10);
+        };
+        ctx.globalAlpha = 0.34;
+        px("#5dffc0", 210, 28, 460, 16);
+        px("#7ad0ff", 260, 52, 340, 12);
+        px("#c4a0ff", 230, 74, 280, 8);
+        ctx.globalAlpha = 0.55;
+        px("#eafff6", 340, 32, 80, 4);
+        ctx.globalAlpha = 1;
+        px("#ffffff", 96, 24, 3, 3);
+        px("#ffffff", 520, 18, 2, 2);
+        px("#d0e8ff", 690, 36, 2, 2);
+        px("#ffffff", 180, 64, 2, 2);
+        px("#ffffff", 800, 22, 2, 2);
+        px("#121c28", 0, 36, 52, 320);
+        px("#1a2838", 52, 72, 40, 284);
+        px("#223448", 92, 124, 34, 232);
+        px("#2a4054", 126, 178, 28, 178);
+        px("#f4fbff", 0, 36, 52, 10);
+        px("#f4fbff", 52, 72, 28, 8);
+        px("#f4fbff", 98, 124, 16, 6);
+        px("#0c1420", 18, 90, 4, 90);
+        px("#0c1420", 70, 130, 3, 70);
+        px("#121c28", ww - 52, 28, 52, 328);
+        px("#1a2838", ww - 92, 80, 40, 276);
+        px("#223448", ww - 126, 136, 34, 220);
+        px("#2a4054", ww - 154, 188, 28, 168);
+        px("#f4fbff", ww - 52, 28, 52, 10);
+        px("#f4fbff", ww - 84, 80, 26, 8);
+        px("#f4fbff", ww - 118, 136, 14, 6);
+        px("#0c1420", ww - 30, 80, 4, 100);
+        pine(118, 352);
+        pine(ww - 150, 344);
+        px("#0c2030", 140, 328, ww - 280, fy - 354);
+        px("#16384e", 180, 360, 200, 4);
+        px("#16384e", 500, 392, 160, 3);
+        px("#8fd4ea", 300, 418, 36, 3);
+        px("#8fd4ea", 560, 372, 22, 2);
+        px("#b7e4f6", L, fy - 26, R - L, 26);
+        px("#f7fdff", L, fy - 26, R - L, 5);
+        px("#ffffff", L + 36, fy - 16, 78, 3);
+        px("#ffffff", L + 240, fy - 12, 52, 2);
+        px("#ffffff", R - 160, fy - 18, 40, 2);
+        px("#8fb8c8", L + 90, fy - 20, 3, 14);
+        px("#8fb8c8", R - 130, fy - 16, 3, 10);
+        px("#e8f7ff", L + 160, fy - 10, 28, 2);
     }
 
     // ── physics
@@ -1369,28 +1414,34 @@ PanelWindow {
     property var snapN: ({})
     property var snapQ: []
     function snapEv(ev, delay) {
-        var n;
+        var n, q;
         if (!g.snapDir || (g.snapEv !== "all" && ("," + g.snapEv + ",").indexOf("," + ev + ",") < 0)) return;
         n = snapN[ev] || 0;
         if (n >= 3) return;
         snapN[ev] = n + 1;
-        snapQ.push({ "at": Date.now() + (delay || 100), "path": g.snapDir + "/" + ev + "-" + (n + 1) + ".png" });
+        // reassign so the shot timer notices the queue (in-place push does not)
+        q = snapQ.slice();
+        q.push({ "at": Date.now() + (delay || 100), "path": g.snapDir + "/" + ev + "-" + (n + 1) + ".png" });
+        snapQ = q;
     }
     function grabSnap(path) {
         if (!stage) return;
-        stage.grabToImage(function (res) { res.saveToFile(path); });
+        stage.grabToImage(function (res) {
+            if (res) res.saveToFile(path);
+            console.info("crew-fight shot " + path);
+        });
     }
     Timer {
         interval: 25; repeat: true; running: ar.snapQ.length > 0
         onTriggered: {
-            var q = ar.snapQ, i = 0, n = q.length, w = 0, now = Date.now(), item;
-            if (!stage) { q.length = 0; return; }
+            var src = ar.snapQ, i = 0, n = src.length, kept = [], now = Date.now(), item;
+            if (!stage) { ar.snapQ = kept; return; }
             while (i < n) {
-                item = q[i++];
+                item = src[i++];
                 if (item.at <= now) ar.grabSnap(item.path);
-                else q[w++] = item;
+                else kept.push(item);
             }
-            q.length = w;
+            ar.snapQ = kept;
         }
     }
     function simStep(raw) {
@@ -1533,7 +1584,7 @@ PanelWindow {
                     const A = ar.cAccent.toString(), A2 = ar.cAccent2.toString();
                     const id = ar.arenaId;
                     ar.paintScenery(ctx);
-                    const apron = id === "desert" ? "#a07838" : id === "fjord" ? "#2a6a88" : id === "plaza" ? "#8a4030" : id === "terem" ? "#6b3a2a" : "#5a3a28";
+                    const apron = id === "desert" ? "#a07838" : id === "fjord" ? "#102838" : id === "plaza" ? "#8a4030" : id === "terem" ? "#6b3a2a" : "#5a3a28";
                     const trim = id === "plaza" ? "#ffd34d" : id === "fjord" ? "#7ec8e8" : id === "desert" ? "#e0b060" : id === "terem" ? "#f4f4f8" : "#c44040";
                     const post = id === "desert" ? "#c4a060" : id === "fjord" ? "#d7f1fb" : id === "plaza" ? "#f4e4c4" : "#f4e4c4";
                     const cap = id === "dojo" ? "#c44040" : id === "desert" ? "#8a5a2b" : id === "fjord" ? "#ffffff" : id === "plaza" ? "#e8668b" : "#8b3030";
