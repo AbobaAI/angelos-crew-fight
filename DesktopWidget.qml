@@ -24,11 +24,20 @@ Item {
     readonly property color gold: hellish ? Theme.hellAccent : "#ffd34d"
     readonly property color well: hellish ? Theme.hellSunken : "#1c1424"
     readonly property real gap: Skin.px(4)
-    readonly property real cell: Skin.px(64)
-    readonly property real cellH: Skin.px(72)
+    // Same art pixel as the walking crew, and the bigger "main" size, so a whole
+    // person stands in the cell with the feet and the head inside it.
+    readonly property real crewU: Math.max(1, Theme.u + (Config.discord.crewSize === "l" ? 1 : Config.discord.crewSize === "s" ? -1 : 0))
+    readonly property real figU: Math.max(crewU + 1, Math.round(crewU * 1.5))
+    readonly property real cell: figU * 18 + Theme.u * 6
+    readonly property real cellH: figU * 32 + Theme.u * 12
     readonly property real post: Theme.u * 2
     readonly property real pad: Skin.px(10)
-    property real open: Desk.expanded ? 1 : 0
+    readonly property var coats: ["#e8668b", "#6ec3e8", "#f0b44c", "#8bd17c", "#b48cf0", "#f08a5d", "#5dd6c0", "#e0e070"]
+    // 0..1 drives opacity and scale only. The frame size flips once, not every frame,
+    // so the desktop grid does not step the window along.
+    property real open: 0
+    property bool roomy: false
+    property bool wantOpen: Desk.expanded
     property real ready: Desk.a && Desk.b ? 1 : 0
     readonly property real cellsW: cell * 2 + gap
     readonly property real actionH: Math.max(botBtn.implicitHeight, fightBtn.implicitHeight)
@@ -36,15 +45,41 @@ Item {
     readonly property real openW: Math.max(knob.implicitWidth, cellsW + post * 2 + gap * 2, botBtn.implicitWidth + post * 2, fightBtn.implicitWidth + post * 2)
     readonly property real openH: knob.implicitHeight + gap + stageH
 
-    implicitWidth: knob.implicitWidth + (openW - knob.implicitWidth) * open
-    implicitHeight: knob.implicitHeight + (openH - knob.implicitHeight) * open
+    implicitWidth: roomy ? openW : knob.implicitWidth
+    implicitHeight: roomy ? openH : knob.implicitHeight
     clip: true
 
-    Behavior on open {
-        NumberAnimation {
-            duration: Skin.ms(240)
-            easing.type: Easing.OutCubic
+    NumberAnimation {
+        id: openAnim
+        target: root
+        property: "open"
+        duration: Skin.ms(260)
+        easing.type: Easing.OutCubic
+        onFinished: {
+            if (!Desk.expanded)
+                root.roomy = false
         }
+    }
+    onWantOpenChanged: root.syncOpen()
+    Component.onCompleted: if (Desk.expanded) {
+        root.roomy = true
+        root.open = 1
+    }
+    function syncOpen() {
+        if (wantOpen) {
+            roomy = true
+            openAnim.to = 1
+            openAnim.restart()
+        } else {
+            openAnim.to = 0
+            openAnim.restart()
+        }
+    }
+    function coatOf(id) {
+        var s = String(id || ""), h = 0, i
+        for (i = 0; i < s.length; i++)
+            h = (h * 33 + s.charCodeAt(i)) % 4096
+        return coats[h % coats.length]
     }
     Behavior on ready {
         NumberAnimation {
@@ -116,15 +151,12 @@ Item {
     Column {
         width: root.openW
         spacing: root.gap
-        // The window shrinks to the icon. Keep the fist in that square, and
-        // in the middle of the arena once the window has grown.
-        x: (root.implicitWidth - width) / 2
 
         Item {
             id: knob
-            width: parent.width
             implicitWidth: Skin.macWidgets ? Skin.px(26) : fistIcon.width + Theme.u * 2
             implicitHeight: Skin.macWidgets ? Skin.px(26) : fistIcon.height + Theme.u * 2
+            width: implicitWidth
             height: implicitHeight
 
             PxIcon {
@@ -156,7 +188,9 @@ Item {
             width: root.openW
             height: root.stageH
             opacity: root.open
-            visible: root.open > 0.04
+            scale: 0.92 + 0.08 * root.open
+            transformOrigin: Item.Top
+            visible: root.roomy
 
             Rectangle {
                 anchors.fill: parent
@@ -214,6 +248,7 @@ Item {
                     id: cellA
                     width: root.cell
                     height: root.cellH
+                    clip: true
                     color: root.well
                     border.width: Math.max(1, Theme.u)
                     border.color: Desk.a ? root.gold : root.wood
@@ -229,29 +264,18 @@ Item {
                         kind: "tiny"
                         color: root.inkDim
                     }
-                    Image {
-                        id: faceA
+                    StillGuy {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: parent.top
-                        anchors.topMargin: Theme.u
+                        anchors.bottom: nameA.top
+                        anchors.bottomMargin: Theme.u
                         visible: !!Desk.a
-                        width: parent.width - Theme.u * 4
-                        height: width
-                        source: Desk.a && Desk.a.avatar ? "file://" + Desk.a.avatar : ""
-                        sourceSize.width: 48
-                        sourceSize.height: 48
-                        fillMode: Image.PreserveAspectCrop
-                        smooth: false
-                        asynchronous: true
+                        u: root.figU
+                        coat: root.coatOf(Desk.a ? Desk.a.id : "")
+                        whoName: Desk.a ? String(Desk.a.name || "") : ""
+                        whoAvatar: Desk.a && Desk.a.avatar ? String(Desk.a.avatar) : ""
                     }
                     PxText {
-                        anchors.centerIn: faceA
-                        visible: !!Desk.a && faceA.status !== Image.Ready
-                        text: root.initial(Desk.a)
-                        kind: "title"
-                        color: root.ink
-                    }
-                    PxText {
+                        id: nameA
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -274,6 +298,7 @@ Item {
                     id: cellB
                     width: root.cell
                     height: root.cellH
+                    clip: true
                     color: root.well
                     border.width: Math.max(1, Theme.u)
                     border.color: Desk.b ? root.gold : root.wood
@@ -289,29 +314,18 @@ Item {
                         kind: "tiny"
                         color: root.inkDim
                     }
-                    Image {
-                        id: faceB
+                    StillGuy {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: parent.top
-                        anchors.topMargin: Theme.u
+                        anchors.bottom: nameB.top
+                        anchors.bottomMargin: Theme.u
                         visible: !!Desk.b
-                        width: parent.width - Theme.u * 4
-                        height: width
-                        source: Desk.b && Desk.b.avatar ? "file://" + Desk.b.avatar : ""
-                        sourceSize.width: 48
-                        sourceSize.height: 48
-                        fillMode: Image.PreserveAspectCrop
-                        smooth: false
-                        asynchronous: true
+                        u: root.figU
+                        coat: root.coatOf(Desk.b ? Desk.b.id : "")
+                        whoName: Desk.b ? String(Desk.b.name || "") : ""
+                        whoAvatar: Desk.b && Desk.b.avatar ? String(Desk.b.avatar) : ""
                     }
                     PxText {
-                        anchors.centerIn: faceB
-                        visible: !!Desk.b && faceB.status !== Image.Ready
-                        text: root.initial(Desk.b)
-                        kind: "title"
-                        color: root.ink
-                    }
-                    PxText {
+                        id: nameB
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -355,6 +369,87 @@ Item {
                 hell: root.hellish
                 text: I18n.t("В бой!", "Fight!")
                 onClicked: Desk.ask()
+            }
+        }
+    }
+
+    // A crew person standing still. No step timer: the legs and arms stay down.
+    component StillGuy: Item {
+        id: guy
+
+        property real u: 2
+        property color coat: "#e8668b"
+        property string whoName: ""
+        property string whoAvatar: ""
+
+        width: u * 18
+        height: u * 32
+
+        Rectangle {
+            x: guy.u * 5
+            y: guy.height - guy.u * 5
+            width: guy.u * 3
+            height: guy.u * 5
+            color: "#2b2433"
+        }
+        Rectangle {
+            x: guy.u * 10
+            y: guy.height - guy.u * 5
+            width: guy.u * 3
+            height: guy.u * 5
+            color: "#2b2433"
+        }
+        Rectangle {
+            x: guy.u * 4
+            y: guy.height - guy.u * 13
+            width: guy.u * 10
+            height: guy.u * 8
+            color: guy.coat
+            border.width: Math.max(1, guy.u)
+            border.color: Qt.darker(guy.coat, 1.6)
+        }
+        Rectangle {
+            x: guy.u * 2
+            y: guy.height - guy.u * 12
+            width: guy.u * 2
+            height: guy.u * 6
+            color: Qt.darker(guy.coat, 1.25)
+        }
+        Rectangle {
+            x: guy.u * 14
+            y: guy.height - guy.u * 12
+            width: guy.u * 2
+            height: guy.u * 6
+            color: Qt.darker(guy.coat, 1.25)
+        }
+        Rectangle {
+            x: (guy.width - width) / 2
+            y: guy.height - guy.u * 13 - height
+            width: guy.u * 14
+            height: guy.u * 14
+            color: "#2b2433"
+            Rectangle {
+                x: guy.u
+                y: guy.u
+                width: parent.width - guy.u * 2
+                height: parent.height - guy.u * 2
+                color: guy.coat
+                PxText {
+                    anchors.centerIn: parent
+                    visible: pic.status !== Image.Ready
+                    color: "#2b2433"
+                    text: guy.whoName.length ? guy.whoName.charAt(0).toUpperCase() : "?"
+                }
+                Image {
+                    id: pic
+                    anchors.fill: parent
+                    source: guy.whoAvatar ? "file://" + guy.whoAvatar : ""
+                    sourceSize.width: 32
+                    sourceSize.height: 32
+                    fillMode: Image.PreserveAspectCrop
+                    smooth: false
+                    asynchronous: true
+                }
             }
         }
     }
