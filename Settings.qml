@@ -80,6 +80,30 @@ Column {
                 onActivated: v => root.set("gpPickupRate", v)
             }
         }
+        SettingRow {
+            label: I18n.t("Арена", "Arena")
+            hint: I18n.t("случайная выбирается заново в начале каждого боя", "random is drawn again at the start of each fight")
+            PxSegmented {
+                model: [
+                    { "label": I18n.t("случ.", "random"), "value": "random" },
+                    { "label": I18n.t("додзё", "dojo"), "value": "dojo" },
+                    { "label": I18n.t("пустыня", "desert"), "value": "desert" },
+                    { "label": I18n.t("фьорд", "fjord"), "value": "fjord" },
+                    { "label": I18n.t("площадь", "plaza"), "value": "plaza" },
+                    { "label": I18n.t("терем", "terem"), "value": "terem" }
+                ]
+                currentValue: String(root.get("gpArena", "random"))
+                onActivated: v => root.set("gpArena", v)
+            }
+        }
+        SettingRow {
+            label: I18n.t("Механики арен", "Arena mechanics")
+            hint: I18n.t("додзё скользит у края, пустыня дует песком, фьорд — лёд, площадь копит супер, у терема снег тормозит", "dojo slips at the edge, the desert blows sand, the fjord is ice, the plaza fills super, snow slows you by the terem")
+            PxToggle {
+                checked: root.get("gpArenaFx", true) !== false
+                onToggled: c => root.set("gpArenaFx", c)
+            }
+        }
     }
     PxGroup {
         title: I18n.t("Звук", "Sound")

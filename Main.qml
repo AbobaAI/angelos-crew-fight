@@ -56,6 +56,10 @@ Item {
     readonly property bool superOn: cfg("gpSuper", true) !== false
     readonly property bool pickupsOn: cfg("gpPickups", true) !== false
     readonly property string pickupRate: ["rare", "normal", "often"].indexOf(String(cfg("gpPickupRate", "normal"))) >= 0 ? String(cfg("gpPickupRate", "normal")) : "normal"
+    // which arena the next fight uses: a culture id, or "random" (rolled once in start)
+    readonly property string arenaPick: ["dojo", "desert", "fjord", "plaza", "terem"].indexOf(String(cfg("gpArena", "random"))) >= 0 ? String(cfg("gpArena", "random")) : "random"
+    readonly property bool arenaFx: cfg("gpArenaFx", true) !== false
+    property string arenaNow: ""
     property bool dbgCharge: false
     property string dbgSpawn: ""
     property string snapEv: ""            // test helper: save the arena (not the screen) as a PNG when these events fire
@@ -310,6 +314,13 @@ Item {
         return n > 0 ? Math.min(12, n) : 1;
     }
 
+    function rollArena() {
+        const ids = ["dojo", "desert", "fjord", "plaza", "terem"];
+        const want = String(arenaPick || "random");
+        arenaNow = ids.indexOf(want) >= 0 ? want : ids[Math.floor(Math.random() * ids.length)];
+        console.info("crew-fight arena " + arenaNow + (arenaFx ? " fx" : " visual"));
+        return arenaNow;
+    }
     function start(x, y, ka, kb, rr, inTour) {
         if (!live) return "stale copy";
         if (!x || !y || x.id === y.id) return "need two different fighters";
@@ -321,9 +332,10 @@ Item {
         banner = "";
         picking = false;
         matchWinner = -1;
+        const arena = rollArena();
         if (!inTour) hideFighters([x.id, y.id]);
         on = true;
-        return "fight: " + x.name + " (" + wa.name + ") vs " + y.name + " (" + wb.name + "), " + (rounds ? rounds + " rounds" : "to KO");
+        return "fight: " + x.name + " (" + wa.name + ") vs " + y.name + " (" + wb.name + "), " + (rounds ? rounds + " rounds" : "to KO") + ", arena " + arena;
     }
     function stop() {
         tourOn = false; tourBracket = false; tourFinal = false; tourStage = ""; tourNext = ""; bracketTimer.stop();
@@ -514,6 +526,9 @@ Item {
         function pickups(v: string): string { const o = v === "toggle" ? !root.pickupsOn : v !== "off" && v !== "0"; root.setCfg("gpPickups", o); return "pickups " + (o ? "on" : "off"); }
         function pickupRate(v: string): string { const r = v === "rare" || v === "often" ? v : "normal"; root.setCfg("gpPickupRate", r); return "pickup rate " + r; }
         function gameplay(v: string): string { const o = v !== "off" && v !== "0"; root.setCfg("gpShield", o); root.setCfg("gpSuper", o); root.setCfg("gpPickups", o); return "shield+super+pickups " + (o ? "on" : "off"); }
+        // arena: random | dojo | desert | fjord | plaza | terem ; mechanics: on | off | toggle
+        function arena(v: string): string { const ids = ["random", "dojo", "desert", "fjord", "plaza", "terem"]; const a = ids.indexOf(v) >= 0 ? v : "random"; root.setCfg("gpArena", a); return "arena " + a; }
+        function arenaFx(v: string): string { const o = v === "toggle" ? !root.arenaFx : v !== "off" && v !== "0"; root.setCfg("gpArenaFx", o); return "arena fx " + (o ? "on" : "off"); }
         // test helpers (not in the README): turbo N = N sim steps per tick, silent
         function charge(): string { root.dbgCharge = true; return "super meters filled"; }
         function spawn(kind: string): string { root.dbgSpawn = kind || "heal"; return "spawn " + kind; }
@@ -538,7 +553,7 @@ Item {
         function demoTournament(): string { return root.startTour(root.fakes, "1", true); }
         function demoTournamentN(n: string, rounds: string): string { return root.startTour(root.fakePool(parseInt(n) || 5), rounds, true); }
         function status(): string {
-            return JSON.stringify({ "live": root.live, "state": DiscordVoice.state, "people": root.people.map(p => p.name + ":" + p.id), "on": root.on, "hp": [root.hpA, root.hpB], "weapons": [root.wa ? root.wa.id : "", root.wb ? root.wb.id : ""], "lastHit": root.lastHit, "rounds": root.rounds, "round": root.round, "phase": root.phase, "score": root.scoreTxt, "say": root.say, "ko": root.ko, "combo": root.combo, "banner": root.banner, "caption": root.caption, "crewHidden": Config.discord.crewHidden, "added": root.added, "perf": root.perf, "moveStat": root.moveStat, "tour": root.tourJson(), "sound": { "on": root.soundOn, "volume": root.soundVol }, "meters": [root.spA, root.spB], "result": root.lastResult ? JSON.parse(root.lastResult) : null, "crew": root.crewOn, "hint": root.crewHint, "settings": { "rounds": root.defRounds, "arenaName": root.arenaName, "scale": root.scaleSetting, "eco": root.eco, "language": root.lang, "crowdShader": root.crowdShader, "shield": root.shieldOn, "super": root.superOn, "pickups": root.pickupsOn, "pickupRate": root.pickupRate } });
+            return JSON.stringify({ "live": root.live, "state": DiscordVoice.state, "people": root.people.map(p => p.name + ":" + p.id), "on": root.on, "hp": [root.hpA, root.hpB], "weapons": [root.wa ? root.wa.id : "", root.wb ? root.wb.id : ""], "lastHit": root.lastHit, "rounds": root.rounds, "round": root.round, "phase": root.phase, "score": root.scoreTxt, "say": root.say, "ko": root.ko, "combo": root.combo, "banner": root.banner, "caption": root.caption, "crewHidden": Config.discord.crewHidden, "added": root.added, "perf": root.perf, "moveStat": root.moveStat, "tour": root.tourJson(), "sound": { "on": root.soundOn, "volume": root.soundVol }, "meters": [root.spA, root.spB], "result": root.lastResult ? JSON.parse(root.lastResult) : null, "crew": root.crewOn, "hint": root.crewHint, "settings": { "rounds": root.defRounds, "arenaName": root.arenaName, "scale": root.scaleSetting, "eco": root.eco, "language": root.lang, "crowdShader": root.crowdShader, "shield": root.shieldOn, "super": root.superOn, "pickups": root.pickupsOn, "pickupRate": root.pickupRate, "arena": root.arenaPick, "arenaNow": root.arenaNow, "arenaFx": root.arenaFx } });
         }
     }
 

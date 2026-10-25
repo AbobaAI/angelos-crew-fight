@@ -40,6 +40,12 @@ PanelWindow {
     readonly property real pr: 750
     readonly property real ropeL: 180
     readonly property real ropeR: 720
+    // culture arena, rolled once in Main.start (random stays put for the whole fight)
+    readonly property string arenaId: ["dojo", "desert", "fjord", "plaza", "terem"].indexOf(g.arenaNow) >= 0 ? g.arenaNow : "dojo"
+    property real ambFr: 0
+    property real gustVis: 0
+    property real gustDir: 1
+    property string gustTxt: ""
     readonly property int roundFr: g.rounds === 0 ? 330 : 450
     readonly property real dmgScale: g.rounds === 1 ? 1 : g.rounds === 0 ? 0.8 : g.rounds === 3 ? 0.5 : 0.38
     property var sm: null
@@ -63,10 +69,13 @@ PanelWindow {
                "combo": 0, "endT": 0, "trX": [112, 788], "rec": null, "maxBeam": 0, "cam": 0, "camX": 450, "camY": 280, "camZ": 1, "punch": 0, "px": 450, "py": 300, "freeze": 0, "sdx": 1, "sdy": 0.3, "vig": 0, "fightT": 0, "maxStall": 0, "pidN": 0,
                "flashC": "#ffffff",
                "items": [], "itemT": 0, "itemN": 0,
-               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0], "sup": [0, 0], "supHit": [0, 0], "pk": { "drop": 0, "heal": 0, "speed": 0, "bomb": 0, "boom": 0, "bombHit": 0, "giveUp": 0 } } };
+               "gustT": 0, "gustCd": 110, "gustD": 1, "warned": false, "sandAcc": 0,
+               "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0], "sup": [0, 0], "supHit": [0, 0], "pk": { "drop": 0, "heal": 0, "speed": 0, "bomb": 0, "boom": 0, "bombHit": 0, "giveUp": 0 }, "ar": { "slip": 0, "gust": 0, "ice": 0, "party": 0, "snow": 0 } } };
         for (const f of sm.f)
             if (f.img) { fCv0.loadImage(f.img); fCv1.loadImage(f.img); }
+        g.banner = arenaTitle();
         g.say = tl("Дааамы и господааа! Добро пожаловать на бой года!", "Ladies and gentlemen! Welcome to the fight of the year!");
+        snapEv("arena", 500);
         tick.last = 0; tick.start();
         hallBg.requestPaint(); staticCv.requestPaint(); ropeBack.requestPaint(); ropeFront.requestPaint(); annCv.requestPaint(); trCv.requestPaint(); scanCv.requestPaint(); vigCv.requestPaint();
         fadeIn.start();
@@ -77,8 +86,9 @@ PanelWindow {
         if (force || sm.sayCd <= 0) { g.say = txt; sm.sayCd = 80; g.sayT = 40; if (force && sm.frame - (sm.blipT || -999) > 90) { sm.blipT = sm.frame; g.sfx("blip", 0.35); } }
     }
     function dust(x, n) {
+        const c = arenaId === "fjord" || arenaId === "terem" ? "#e8f4ff" : arenaId === "desert" ? "#e0b060" : arenaId === "dojo" ? "#d8c8a0" : arenaId === "plaza" ? "#e8d4c0" : "#b9a88a";
         for (let i = 0; i < n; i++)
-            sm.parts.push({ "x": x + (Math.random() - 0.5) * 30, "y": fy - 2, "vx": (Math.random() - 0.5) * 4, "vy": -Math.random() * 2, "g": 0.05, "life": 18 + Math.random() * 10, "c": "#b9a88a", "s": 4 });
+            sm.parts.push({ "x": x + (Math.random() - 0.5) * 30, "y": fy - 2, "vx": (Math.random() - 0.5) * 4, "vy": -Math.random() * 2, "g": 0.05, "life": 18 + Math.random() * 10, "c": c, "s": 4 });
     }
     function wcols(wp) { return wp ? wp.cols.map(c => c.length === 1 ? g.wcol(c) : c) : []; }
     function sparks(x, y, n, crit, wp, extra) {
@@ -242,7 +252,11 @@ PanelWindow {
             f.seen = id;
             if (Math.random() >= (0.4 + (f.hp < 40 ? 0.15 : 0) + (f.hp < 20 ? 0.1 : 0)) * threat) return false;
         } else if (f.cd <= 0 || dist > 190 || Math.random() > 0.012 * dt) return false;   // idle guard stance while waiting
-        f.st = "block"; f.t = 14 + Math.random() * 4; f.blkAge = 0; f.gd -= 8; f.vx = 0;
+        f.st = "block"; f.t = 14 + Math.random() * 4; f.blkAge = 0; f.gd -= 8;
+        // a shield plants the feet: full stop on a normal floor, only a brace on ice / slick tatami
+        if (g.arenaFx && arenaId === "fjord") f.vx *= 0.55;
+        else if (g.arenaFx && arenaId === "dojo" && (f.x < ropeL + 48 || f.x > ropeR - 48)) f.vx *= 0.5;
+        else f.vx = 0;
         return true;
     }
     // ── super move: the meter fills from hits dealt/taken; when full the fighter fires a flashy, unstoppable (but guard-breakable) weapon move
@@ -287,6 +301,9 @@ PanelWindow {
             for (let k = 0; k < 7; k++) f.trail.unshift({ "x": f.x + (nx - f.x) * k / 7, "y": f.y });
             if (f.trail.length > 4) f.trail.length = 4;
             dust(f.x, 6); f.x = nx; dust(nx, 8); f.vx = 0;
+            // the lunge keeps going on ice, and a slick tatami edge lets it slide a step
+            if (g.arenaFx && arenaId === "fjord") f.vx = f.face * (f.spd > 0 ? 8 : 5);
+            else if (g.arenaFx && arenaId === "dojo" && (nx < ropeL + 48 || nx > ropeR - 48)) f.vx = f.face * (f.spd > 0 ? 5 : 3);
         }
         const m2 = { "id": "super", "sp": true, "fixed": mv.fixed / mv.nh, "kb": i === mv.nh - 1 ? mv.kb : 0.3, "vy": i === mv.nh - 1 ? mv.vy : 3, "w": mv.w, "shake": 10, "dm": 1 };
         sm.flash = Math.max(sm.flash, first ? 7 : 3);
@@ -427,7 +444,11 @@ PanelWindow {
                 if (it.y <= 0 && it.vy < 0) {
                     it.y = 0;
                     if (it.st === "fall" && it.vy < -6 && !it.bounced) { it.vy = -it.vy * 0.3; it.bounced = true; it.y = 0.01; dust(it.x, 5); }
-                    else { it.vy = 0; it.vx = 0; dust(it.x, 5); it.t = 0; if (it.st === "fly") { it.st = "fuse"; it.fuse = 36; g.sfx("fuse", 0.8); } else it.st = "ready"; }
+                    else {
+                        it.vy = 0;
+                        it.vx = (g.arenaFx && arenaId === "fjord" && it.st === "fall") ? (Math.random() - 0.5) * 2.4 : 0;
+                        dust(it.x, 5); it.t = 0; if (it.st === "fly") { it.st = "fuse"; it.fuse = 36; g.sfx("fuse", 0.8); } else it.st = "ready";
+                    }
                 }
             } else if (it.st === "ready") {
                 it.life -= dt;
@@ -436,6 +457,14 @@ PanelWindow {
             } else if (it.st === "fuse") {
                 it.fuse -= dt;
                 if (it.fuse <= 0) { explode(it); continue; }
+            }
+            if (g.arenaFx && (it.st === "ready" || it.st === "fuse")) {
+                if (arenaId === "desert" && sm.gustT > 0) it.x += sm.gustD * 2.4 * dt;
+                else if (arenaId === "dojo" && it.st !== "fly") {
+                    if (it.x < ropeL + 50) it.x -= 0.28 * dt;
+                    else if (it.x > ropeR - 50) it.x += 0.28 * dt;
+                } else if (arenaId === "fjord" && Math.abs(it.vx) > 0.04) { it.x += it.vx * dt; it.vx *= Math.pow(0.96, dt); }
+                it.x = Math.max(ropeL + 14, Math.min(ropeR - 14, it.x));
             }
             if (sm.phase === "fight" && (it.st === "ready" || (it.k === "bomb" && it.st === "fuse" && it.fuse > 28 && !it.thrown))) {
                 let got = null;
@@ -515,19 +544,222 @@ PanelWindow {
         }
     }
 
+    // ── arenas: one short name at the bell, one mechanic, scenery is painted once
+    function arenaTitle() {
+        switch (arenaId) {
+        case "dojo": return tl("ДОДЗЁ", "DOJO");
+        case "desert": return tl("ПУСТЫНЯ", "DESERT");
+        case "fjord": return tl("ФЬОРД", "FJORD");
+        case "plaza": return tl("ПЛОЩАДЬ", "PLAZA");
+        case "terem": return tl("ТЕРЕМ", "TEREM");
+        default: return "";
+        }
+    }
+    function arenaBlurb() {
+        if (!g.arenaFx) {
+            switch (arenaId) {
+            case "dojo": return tl("Арена: Додзё.", "Arena: Dojo.");
+            case "desert": return tl("Арена: Пустыня.", "Arena: Desert.");
+            case "fjord": return tl("Арена: Фьорд.", "Arena: Fjord.");
+            case "plaza": return tl("Арена: Площадь.", "Arena: Plaza.");
+            default: return tl("Арена: Терем.", "Arena: Terem.");
+            }
+        }
+        switch (arenaId) {
+        case "dojo": return tl("Арена: Додзё. У края татами скользко.", "Arena: Dojo. The tatami is slick at the edges.");
+        case "desert": return tl("Арена: Пустыня. Песчаная буря сдвигает бойцов.", "Arena: Desert. The sandstorm pushes the fighters.");
+        case "fjord": return tl("Арена: Фьорд. На льду долго скользят.", "Arena: Fjord. The ice keeps you sliding.");
+        case "plaza": return tl("Арена: Площадь. В центре праздник копит супер.", "Arena: Plaza. The party in the center fills your super.");
+        default: return tl("Арена: Терем. У забора глубокий снег.", "Arena: Terem. Deep snow by the fence.");
+        }
+    }
+    function arenaWash() {
+        switch (arenaId) {
+        case "dojo": return "#3a241c";
+        case "desert": return "#6a4018";
+        case "fjord": return "#163040";
+        case "plaza": return "#4a2040";
+        case "terem": return "#1c3050";
+        default: return "";
+        }
+    }
+    function ropeColors() {
+        switch (arenaId) {
+        case "dojo": return ["#c44040", "#f4e4c4", "#6b3a2a"];
+        case "desert": return ["#c4922a", "#f0d090", "#8a5a2b"];
+        case "fjord": return ["#9fd4ea", "#ffffff", "#3a7a9a"];
+        case "plaza": return ["#e8668b", "#ffd34d", "#5dd6c0"];
+        case "terem": return ["#c44040", "#f4f4f8", "#6a8fbf"];
+        default: return ["#e04848", "#ffffff", "#3a7bd5"];
+        }
+    }
+    function edgeOf(x, pad) { return x < ropeL + pad || x > ropeR - pad; }
+    function ambX(i) {
+        const sp = arenaId === "desert" ? (gustVis > 0 ? gustDir * 7 : 0.3) : 0.4;
+        let v = (i * 83 + ambFr * sp) % 980;
+        if (v < 0) v += 980;
+        return Math.round(v - 40);
+    }
+    function ambY(i) {
+        const sp = arenaId === "desert" && gustVis > 0 ? 1.3 : 0.45;
+        let v = (i * 53 + ambFr * sp) % 340;
+        if (v < 0) v += 340;
+        return Math.round(60 + v + Math.sin(ambFr / 14 + i) * 6);
+    }
+    // pre: scale the step the brain just chose. post: add a force after friction so it can build up
+    function arenaForce(f, dt, post) {
+        if (!g.arenaFx || !sm || sm.phase !== "fight" || f.st === "ko" || f.st === "enter") return;
+        const sup = f.st === "atk" && f.mv && f.mv.k === "super";
+        if (!post && arenaId === "dojo" && f.y < 8 && f.st !== "block" && edgeOf(f.x, 48)) {
+            const k = f.spd > 0 ? 1.6 : sup ? 1.25 : 1;
+            f.vx += (f.x < ropeL + 48 ? -0.22 : 0.22) * k * dt;
+            sm.st.ar.slip++;
+        } else if (!post && arenaId === "terem" && f.y < 10 && edgeOf(f.x, 58)) {
+            const k = sup ? 1 : f.spd > 0 ? 0.86 : f.st === "block" ? 0.48 : (f.st === "dash" || f.st === "fetch" || f.st === "flee" || f.st === "walk") ? 0.58 : 0.7;
+            f.vx *= k;
+            sm.st.ar.snow++;
+        }
+        if (post && arenaId === "desert" && sm.gustT > 0) {
+            const k = f.st === "block" ? 0.22 : sup ? 0.34 : f.spd > 0 ? 0.5 : 1.05;
+            f.vx += sm.gustD * k * dt;
+            sm.st.ar.gust++;
+        } else if (post && arenaId === "plaza" && Math.abs(f.x - 450) < 78 && f.y < 28) {
+            const k = f.st === "block" ? 0.35 : f.spd > 0 ? 1.4 : 1;
+            if (g.superOn) addSp(f, 0.14 * k * dt);
+            else if (f.st === "dash" || f.st === "fetch" || f.st === "flee") f.vx *= 1 + 0.12 * k;
+            sm.st.ar.party++;
+        }
+    }
+    function stepGust(dt) {
+        if (!g.arenaFx || arenaId !== "desert" || sm.phase !== "fight") { sm.gustT = 0; return; }
+        if (sm.gustT > 0) {
+            sm.gustT -= dt;
+            sm.sandAcc += dt;
+            if (sm.sandAcc >= 3) {
+                sm.sandAcc = 0;
+                if (sm.parts.length < 40)
+                    sm.parts.push({ "x": sm.gustD > 0 ? 130 + Math.random() * 120 : 650 + Math.random() * 120, "y": fy - 20 - Math.random() * 120, "vx": sm.gustD * (4 + Math.random() * 5), "vy": (Math.random() - 0.5) * 0.6, "g": 0.04, "life": 16 + Math.random() * 8, "c": rnd(["#e0b060", "#f0d090", "#c4922a", "#fff2c8"]), "s": 3 });
+            }
+        } else {
+            sm.gustCd -= dt;
+            if (sm.gustCd <= 24 && !sm.warned) {
+                sm.warned = true;
+                const next = -sm.gustD;
+                comment(next > 0 ? tl("Песок сейчас пойдёт слева направо!", "Sand is about to blow left to right!") : tl("Песок сейчас пойдёт справа налево!", "Sand is about to blow right to left!"), false);
+            }
+            if (sm.gustCd <= 0) { sm.gustD = -sm.gustD; sm.gustT = 38; sm.gustCd = 120 + Math.random() * 40; sm.warned = false; }
+        }
+    }
+    // scenery painted once: architecture and nature, no people
+    function paintScenery(ctx) {
+        const px = (c, x, y, w, h) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+        const ww = 900, fy = ar.fy, L = ropeL, R = ropeR, top = 84, id = arenaId;
+        const tri = (x, base, h, c, sh) => {
+            const steps = Math.floor(h / 6);
+            for (let i = 0; i < steps; i++) {
+                const w = base * (1 - i / steps);
+                px(c, x + (base - w) / 2, fy - 36 - i * 6, w, 6);
+                px(sh, x + (base - w) / 2 + w * 0.55, fy - 36 - i * 6, w * 0.45, 6);
+            }
+        };
+        if (id === "dojo") {
+            for (const x of [24, ww - 104]) {
+                px("#2a1c14", x - 2, top + 2, 84, 108);
+                px("#f3e2c4", x, top + 4, 80, 104);
+                for (let i = 1; i < 3; i++) px("#c4a882", x, top + 4 + i * 34, 80, 2);
+                px("#c4a882", x + 39, top + 4, 2, 104);
+            }
+            px("#5a3a28", 18, top - 6, 110, 5);
+            px("#5a3a28", 112, top - 12, 5, 24);
+            for (const b of [[28, top - 16], [48, top - 6], [70, top - 18], [92, top - 4], [114, top + 4]]) {
+                px("#f4a0b8", b[0], b[1], 8, 8); px("#ffd0dc", b[0] + 2, b[1] + 2, 3, 3);
+            }
+            px("#cbb98a", L, fy - 18, R - L, 18);
+            for (let x = L; x < R; x += 36) px("#7f9348", x, fy - 18, 3, 18);
+            px("#efe4c4", L, fy - 16, 48, 14);
+            px("#efe4c4", R - 48, fy - 16, 48, 14);
+        } else if (id === "desert") {
+            px("#ffd34d", ww - 150, top - 16, 26, 26);
+            px("#fff2a8", ww - 144, top - 10, 14, 14);
+            tri(240, 150, 90, "#d4b06a", "#a07838");
+            tri(420, 210, 126, "#e0c080", "#8a6230");
+            tri(640, 130, 78, "#c4a060", "#7a5828");
+            px("#e0b060", 70, fy - 18, 760, 12);
+            px("#c4922a", 150, fy - 26, 170, 8);
+            px("#c4922a", 530, fy - 24, 150, 8);
+        } else if (id === "fjord") {
+            tri(150, 230, 100, "#3a5060", "#2a3c4a");
+            tri(390, 270, 140, "#2c4254", "#1e3040");
+            tri(650, 190, 88, "#4a6274", "#314858");
+            px("#f4fbff", 230, fy - 128, 36, 10);
+            px("#f4fbff", 490, fy - 168, 48, 12);
+            px("#f4fbff", 720, fy - 116, 28, 8);
+            px("#d7f1fb", L, fy - 16, R - L, 16);
+            px("#ffffff", L + 16, fy - 14, R - L - 32, 3);
+            for (let k = 0; k < 5; k++) px("#7eb0c8", L + 30 + k * 100, fy - 9, 16, 2);
+            px("#2a6a88", L - 16, fy + 6, R - L + 32, 14);
+            px("#7ec8e8", L + 10, fy + 10, 36, 3);
+        } else if (id === "plaza") {
+            px("#2b2433", 36, 148, ww - 72, 2);
+            const cols = ["#e8668b", "#ffd34d", "#5dd6c0", "#f08a5d", "#b48cf0", "#ffffff"];
+            for (let i = 0; i < 16; i++) {
+                const x = 48 + i * 52, c = cols[i % cols.length];
+                px(c, x, 150, 22, 14);
+                px("#1a1218", x + 8, 154, 6, 6);
+                px(c, x + 8, 164, 4, 4);
+            }
+            px("#cbb8a0", L, fy - 16, R - L, 16);
+            for (let x = L; x < R; x += 28) px("#8a7560", x, fy - 16, 2, 16);
+            px("#e8668b", 450 - 78, fy - 14, 156, 3);
+            px("#ffd34d", 450 - 46, fy - 18, 92, 4);
+            px("#d8d0c8", 400, fy - 78, 100, 26);
+            px("#6ec3e8", 408, fy - 72, 84, 12);
+            px("#ffffff", 444, fy - 96, 6, 24);
+        } else if (id === "terem") {
+            px("#f4e4c4", 360, fy - 148, 180, 112);
+            px("#6b3a2a", 378, fy - 108, 26, 36);
+            px("#f0d090", 382, fy - 104, 18, 18);
+            px("#6b3a2a", 496, fy - 118, 20, 48);
+            for (let i = 0; i < 8; i++) {
+                const w = 250 - i * 24;
+                px("#8b3030", 450 - w / 2, fy - 156 - i * 8, w, 8);
+                px("#ffffff", 450 - w / 2 + 2, fy - 160 - i * 8, w - 4, 4);
+            }
+            for (const x0 of [L - 8, R - 62]) {
+                px("#6b4a32", x0, fy - 44, 70, 5);
+                for (let i = 0; i < 4; i++) px("#6b4a32", x0 + 6 + i * 18, fy - 44, 4, 26);
+            }
+            px("#eef4fb", L, fy - 14, R - L, 14);
+            px("#ffffff", L, fy - 30, 62, 20);
+            px("#ffffff", R - 62, fy - 30, 62, 20);
+            px("#a84830", L + 78, fy - 52, 34, 30);
+            px("#2b2433", L + 86, fy - 44, 18, 12);
+            px("#ffb347", L + 90, fy - 40, 10, 6);
+            px("#6b3a2a", L + 90, fy - 64, 10, 14);
+        }
+    }
+
     // ── physics
     function physics(f, dt) {
+        arenaForce(f, dt, false);
         f.x += f.vx * dt;
         if (f.y > 0 || f.vy !== 0) {
             f.vy -= 1.1 * dt;
             f.y += f.vy * dt;
             if (f.y <= 0) { if (f.vy < -7) { dust(f.x, 8); f.squash = 6; } f.y = 0; f.vy = 0; }
         }
-        if (f.y === 0 && f.st !== "dash" && f.st !== "walk" && f.st !== "fetch" && f.st !== "flee") f.vx *= Math.pow(0.8, dt);
+        let fr = 0.8;
+        if (g.arenaFx && f.y === 0) {
+            if (arenaId === "fjord") fr = f.spd > 0 ? 0.97 : 0.93;
+            else if (arenaId === "dojo" && edgeOf(f.x, 48)) fr = f.spd > 0 ? 0.95 : 0.9;
+        }
+        if (f.y === 0 && f.st !== "dash" && f.st !== "walk" && f.st !== "fetch" && f.st !== "flee") f.vx *= Math.pow(fr, dt);
+        if (g.arenaFx && arenaId === "fjord" && f.y === 0 && Math.abs(f.vx) > 2.2 && f.st !== "dash") sm.st.ar.ice++;
         if (f.st !== "enter") {
             if (f.x < ropeL) { f.x = ropeL; if (Math.abs(f.vx) > 3) { sm.ropeW[0] = Math.min(14, Math.abs(f.vx)); f.vx = Math.abs(f.vx) * 0.75; } else f.vx = 0; }
             if (f.x > ropeR) { f.x = ropeR; if (Math.abs(f.vx) > 3) { sm.ropeW[1] = Math.min(14, Math.abs(f.vx)); f.vx = -Math.abs(f.vx) * 0.75; } else f.vx = 0; }
         }
+        arenaForce(f, dt, true);
         if (f.squash > 0) f.squash -= dt;
         if (f.flash > 0) f.flash -= dt;
         if (f.bflash > 0) f.bflash -= dt;
@@ -673,6 +905,8 @@ PanelWindow {
                     f.x += f.vx * dt; f.vy -= 1.1 * dt; f.y += f.vy * dt;
                     if (f.y <= 0 && f.vy < 0) { f.y = 0; f.vy = 0; f.vx = 0; f.st = "idle"; f.squash = 6; dust(f.x, 10); sm.hype = 0.8; }
                 }
+            if (sm.phT > 10 && sm.phT - dt <= 10) comment(arenaBlurb(), true);
+            if (sm.phT > 52 && g.banner === arenaTitle()) g.banner = "";
             if (sm.phT > 4 && sm.phT - dt <= 4 && g.tourStage) comment(tl("Турнир! " + g.tourStage + "! Матч " + g.tourMatchNo + ".", "Tournament! " + g.tourStage + "! Match " + g.tourMatchNo + "."), true);
             if (sm.phT > 40 && sm.phT - dt <= 40) comment(tl("В синем углу — " + A.who.name + " с оружием «" + A.wep.name + "»!", "In the blue corner — " + A.who.name + " with the " + A.wep.name + "!"), true);
             if (sm.phT > 100 && sm.phT - dt <= 100) comment(tl("В красном — " + B.who.name + " с оружием «" + B.wep.name + "»! " + (g.rounds ? g.rounds + " раунд" + (g.rounds === 1 ? "" : g.rounds < 5 ? "а" : "ов") : "До нокаута") + "!", "In the red corner — " + B.who.name + " with the " + B.wep.name + "! " + (g.rounds ? g.rounds + " round" + (g.rounds === 1 ? "" : "s") : "To the knockout") + "!"), true);
@@ -754,7 +988,7 @@ PanelWindow {
         console.info("crew-fight moves " + sm.f[0].wep.id + " vs " + sm.f[1].wep.id + ": melee " + sm.mvStat.m + ", ranged " + sm.mvStat.r);
         sm.phase = "win"; sm.phT = 0; sm.endT = 1; sm.pod = { "rise": 0, "st": 0, "jt": 0, "x0": 0, "t2": 0 };
         g.lastResult = JSON.stringify({ "fight": Math.round(sm.fightT / 3) / 10, "ko": !!sm.byKO, "win": sm.winner.side, "rounds": g.rounds, "wep": [sm.f[0].wep.id, sm.f[1].wep.id],
-                                        "hp": [Math.round(sm.f[0].hp), Math.round(sm.f[1].hp)], "stall": Math.round(sm.maxStall / 3) / 10, "mv": Math.round(sm.st.maxMv / 3) / 10, "st": sm.st });
+                                        "hp": [Math.round(sm.f[0].hp), Math.round(sm.f[1].hp)], "stall": Math.round(sm.maxStall / 3) / 10, "mv": Math.round(sm.st.maxMv / 3) / 10, "arena": arenaId, "fx": !!g.arenaFx, "st": sm.st });
         sm.winner.st = "win"; sm.winner.sit = false;
         if (sm.loser.st !== "ko") sm.loser.st = "idle";
         g.banner = g.tourFinal ? "TOURNAMENT CHAMPION" : sm.winner.who.name + " WINS";
@@ -769,6 +1003,7 @@ PanelWindow {
         sm.dt = dt;
         sm.frame += dt;
         if (g.dbgCharge) { g.dbgCharge = false; for (const f of sm.f) f.sp = 100; }
+        stepGust(dt);
         stepRoundFlow(dt);
         stepItems(dt);
         g.phase = sm.phase;
@@ -875,7 +1110,7 @@ PanelWindow {
         if (Date.now() - P.t0 > 1000) {
             g.perf = "fps " + (P.n / ((Date.now() - P.t0) / 1000)).toFixed(0) + ", frame avg " + (P.sum / P.n * 1000).toFixed(1) + " ms / max " + (P.max * 1000).toFixed(0)
                 + " ms, >34ms: " + P.slow + ", paint avg " + (P.pn ? (P.psum / P.pn).toFixed(1) : "-") + " / max " + P.pmax + " ms, parts " + (sm ? sm.parts.length : 0);
-            if (sm && sm.phase === "fight") console.info("crew-fight perf: " + g.perf);
+            if (sm && sm.phase === "fight") console.info("crew-fight perf: " + g.perf + " arena " + arenaId + (g.arenaFx ? " fx" : " visual"));
             perf = { "n": 0, "sum": 0, "max": 0, "slow": 0, "pn": 0, "psum": 0, "pmax": 0, "t0": Date.now() };
         }
     }
@@ -926,6 +1161,7 @@ PanelWindow {
         const talk = g.sayT > 0 && Math.floor(fr / 3) % 2 === 0;
         if (talk !== annCv.talk) { annCv.talk = talk; annCv.requestPaint(); }
         upd(canvas, s.parts.length > 0 || s.proj.length > 0 || s.beams.length > 0 || s.rings.length > 0 || s.floats.length > 0 || s.maxBeam > 0);
+        ambFr = fr; gustVis = s.gustT > 0 ? 1 : 0; gustDir = s.gustD || 1;
     }
     function applyCam() {
         const s = sm;
@@ -943,6 +1179,7 @@ PanelWindow {
         const live = s.phase === "fight" ? (Math.floor(s.frame / 15) % 2 ? "● LIVE" : "○ LIVE") : s.phase === "break" ? tl("ПЕРЕРЫВ", "BREAK") : s.phase === "ko" || s.phase === "win" ? (s.byKO ? "K.O.!" : tl("ПОБЕДА", "VICTORY")) : "SHOWTIME";
         jScore = g.scoreTxt + "   " + live;
         jRound = tl("РАУНД ", "ROUND ") + Math.max(1, s.round) + (g.rounds ? "/" + g.rounds : "") + (g.timerTxt ? "  ·  " + g.timerTxt : "");
+        gustTxt = g.arenaFx && arenaId === "desert" && s.gustT > 0 ? (s.gustD > 0 ? "▶  ▶  ▶" : "◀  ◀  ◀") : "";
     }
     // test helper: grab the arena item itself (never the screen) when an event fires: IPC snap <events|all> <dir>
     property var snapN: ({})
@@ -1011,6 +1248,8 @@ PanelWindow {
                 const ctx = getContext("2d"); ctx.reset();
                 const dark = Qt.darker(ar.cFace, 1.8).toString(), dark2 = Qt.darker(ar.cFace, 1.35).toString();
                 canvas.px(ctx, dark, 4, 4, width - 8, height - 8);
+                const wash = ar.arenaWash();
+                if (wash) { ctx.globalAlpha = 0.45; canvas.px(ctx, wash, 4, 4, width - 8, height - 8); ctx.globalAlpha = 1; }
                 ctx.globalAlpha = 0.18; for (let k = 0; k < 6; k++) canvas.px(ctx, dark2, 10, 124 + k * 22, width - 20, 10); ctx.globalAlpha = 1;
             }
         }
@@ -1090,19 +1329,24 @@ PanelWindow {
                 onPaint: {
                     const ctx = getContext("2d"); ctx.reset();
                     const ww = width, fy = ar.fy, pl = ar.pl, pr = ar.pr, hallTop = 84, dk = canvas.dk, px = canvas.px;
-                    const A = ar.cAccent.toString(), A2 = ar.cAccent2.toString(), SUNK = ar.cSunken.toString();
+                    const A = ar.cAccent.toString(), A2 = ar.cAccent2.toString();
+                    const id = ar.arenaId;
+                    ar.paintScenery(ctx);
+                    const apron = id === "desert" ? "#a07838" : id === "fjord" ? "#2a6a88" : id === "plaza" ? "#8a4030" : id === "terem" ? "#6b3a2a" : "#5a3a28";
+                    const trim = id === "plaza" ? "#ffd34d" : id === "fjord" ? "#7ec8e8" : id === "desert" ? "#e0b060" : id === "terem" ? "#f4f4f8" : "#c44040";
+                    const post = id === "desert" ? "#c4a060" : id === "fjord" ? "#d7f1fb" : id === "plaza" ? "#f4e4c4" : "#f4e4c4";
+                    const cap = id === "dojo" ? "#c44040" : id === "desert" ? "#8a5a2b" : id === "fjord" ? "#ffffff" : id === "plaza" ? "#e8668b" : "#8b3030";
                     for (const bx2 of [40, ww - 220]) {
-                        px(ctx, A, bx2, hallTop + 20, 180, 30); px(ctx, dk, bx2 + 3, hallTop + 23, 174, 24);
-                        for (let t = 0; t < 6; t++) px(ctx, A, bx2 + 6 + t * 30, hallTop + 50, 12, 6 + (t % 2) * 4);
+                        px(ctx, trim, bx2, hallTop + 20, 180, 30); px(ctx, dk, bx2 + 3, hallTop + 23, 174, 24);
+                        for (let t = 0; t < 6; t++) px(ctx, trim, bx2 + 6 + t * 30, hallTop + 50, 12, 6 + (t % 2) * 4);
                         ctx.fillStyle = A2; ctx.font = "bold 15px \"" + Theme.fontTitle + "\""; ctx.textAlign = "center";
                         ctx.fillText(String(ar.g.arenaName).toUpperCase().slice(0, 18), bx2 + 90, hallTop + 40);
                     }
-                    px(ctx, A, pl - 40, fy, pr - pl + 80, 14);
-                    px(ctx, dk, pl - 40, fy + 14, pr - pl + 80, 30);
-                    ctx.globalAlpha = 0.25; px(ctx, A2, pl - 32, fy + 18, pr - pl + 64, 4); ctx.globalAlpha = 1;
-                    px(ctx, SUNK, pl - 40, fy - 6, pr - pl + 80, 6);
-                    for (const x of [pl, pr]) { px(ctx, "#d8d8e0", x, fy - 104, 8, 104); px(ctx, A, x - 2, fy - 110, 12, 10); }
-                    for (const tx2 of [170, 670]) { px(ctx, "#111116", tx2, fy - 150, 60, 144); px(ctx, A, tx2 - 4, fy - 156, 68, 6); ctx.globalAlpha = 0.5; px(ctx, A2, tx2, fy - 150, 4, 144); px(ctx, A2, tx2 + 56, fy - 150, 4, 144); ctx.globalAlpha = 1; }
+                    px(ctx, trim, pl - 40, fy, pr - pl + 80, 14);
+                    px(ctx, apron, pl - 40, fy + 14, pr - pl + 80, 30);
+                    ctx.globalAlpha = 0.25; px(ctx, A, pl - 32, fy + 18, pr - pl + 64, 4); ctx.globalAlpha = 1;
+                    px(ctx, id === "fjord" ? "#ffffff" : id === "desert" ? "#e0b060" : "#cbb8a0", pl - 40, fy - 6, pr - pl + 80, 6);
+                    for (const x of [pl, pr]) { px(ctx, post, x, fy - 104, 8, 104); px(ctx, cap, x - 2, fy - 110, 12, 10); }
                 }
             }
         component Lyr: Canvas {
@@ -1113,7 +1357,7 @@ PanelWindow {
         }
         Lyr {
             id: ropeBack
-            onPaint: { const ctx = getContext("2d"); ctx.reset(); if (ar.sm) { canvas.drawRope(ctx, 96, "#e04848", false); canvas.drawRope(ctx, 70, "#ffffff", false); } }
+            onPaint: { const ctx = getContext("2d"); ctx.reset(); if (ar.sm) { const r = ar.ropeColors(); canvas.drawRope(ctx, 96, r[0], false); canvas.drawRope(ctx, 70, r[1], false); } }
         }
         Lyr {
             id: trCv
@@ -1186,7 +1430,7 @@ PanelWindow {
         }
         Lyr {
             id: ropeFront
-            onPaint: { const ctx = getContext("2d"); ctx.reset(); if (ar.sm) canvas.drawRope(ctx, 44, "#3a7bd5", true); }
+            onPaint: { const ctx = getContext("2d"); ctx.reset(); if (ar.sm) canvas.drawRope(ctx, 44, ar.ropeColors()[2], true); }
         }
         // ring smoke: plain rectangles, positions bound to the frame counter
         Item {
@@ -1198,12 +1442,27 @@ PanelWindow {
                 model: 9
                 Rectangle {
                     required property int index
-                    color: "#d8d8e0"
+                    color: ar.arenaId === "desert" ? "#e0b060" : (ar.arenaId === "fjord" || ar.arenaId === "terem") ? "#e8f4ff" : ar.arenaId === "dojo" ? "#f4e4c4" : ar.arenaId === "plaza" ? "#ffd0dc" : "#d8d8e0"
                     opacity: 0.07 + (smokeLayer.boost ? 0.06 : 0)
                     width: 90 + (index % 3) * 30; height: 26
                     x: Math.round(((index * 113 + smokeLayer.fr * (0.6 + (index % 3) * 0.3)) % 1100) - 100)
                     y: Math.round(ar.fy - 22 + Math.sin(smokeLayer.fr / 9 + index) * 4)
                 }
+            }
+        }
+        // petals, snow or sand: a dozen rectangles moved on the GPU, no extra canvas
+        Repeater {
+            model: 12
+            Rectangle {
+                required property int index
+                readonly property string kind: ar.arenaId
+                visible: kind === "dojo" || kind === "desert" || kind === "fjord" || kind === "terem"
+                color: kind === "dojo" ? "#f4a0b8" : kind === "desert" ? "#e0b060" : "#ffffff"
+                opacity: kind === "desert" ? (ar.gustVis > 0 ? 0.75 : 0.22) : 0.8
+                width: kind === "dojo" ? 5 : 3
+                height: kind === "dojo" ? 4 : 3
+                x: ar.ambX(index)
+                y: ar.ambY(index)
             }
         }
         Canvas {
@@ -1731,6 +1990,12 @@ PanelWindow {
             style: Text.Outline; styleColor: "#2b2433"
             onTextChanged: if (bannerT.text !== "") pulse.restart()
             SequentialAnimation { id: pulse; NumberAnimation { target: bannerT; property: "scale"; from: 2.4; to: 0.9; duration: 220; easing.type: Easing.OutQuad } NumberAnimation { target: bannerT; property: "scale"; to: 1; duration: 120 } }
+        }
+        PxText {
+            anchors.horizontalCenter: parent.horizontalCenter; y: 214
+            text: ar.gustTxt; visible: text !== ""
+            color: "#e0b060"; font.bold: true; font.pixelSize: 16
+            style: Text.Outline; styleColor: "#2b2433"
         }
         PxText {
             anchors.horizontalCenter: parent.horizontalCenter; y: 222
