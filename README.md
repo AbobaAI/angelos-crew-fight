@@ -4,10 +4,10 @@
 
 # 🥊 Crew Fight
 
-**A pixel boxing match between the people in your Discord call — right on your AngelOS desktop.**
+**A pixel fight between the people in your Discord call — right on your AngelOS desktop.**
 
 [![AngelOS](https://img.shields.io/badge/AngelOS-release%206%2B-e8668b?style=flat-square)](https://github.com/futureUnd1ground/angelos-community-registry)
-[![Version](https://img.shields.io/badge/version-2.0.0-6ec3e8?style=flat-square)](https://github.com/AbobaAI/angelos-crew-fight/releases/tag/v2.0.0)
+[![Version](https://img.shields.io/badge/version-2.1.0-6ec3e8?style=flat-square)](https://github.com/AbobaAI/angelos-crew-fight/releases/tag/v2.1.0)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8bd17c?style=flat-square)](LICENSE)
 [![Sounds: CC0](https://img.shields.io/badge/sounds-CC0-f0b44c?style=flat-square)](sounds/LICENSES.txt)
 [![Languages](https://img.shields.io/badge/lang-en%20%7C%20ru-b48cf0?style=flat-square)](#%EF%B8%8F-settings)
@@ -22,12 +22,30 @@
 
 - 👥 **Real fighters** — the "Little People from the Discord Call" AngelOS already draws over the bar; no call → demo fighters.
 - ⚔️ **8 weapons**, 3 moves + a finisher each, combos, crits, knockback, stuns.
+- 🛡️ **Shield** — fighters raise a block (damage ×0.2). A perfect block staggers the attacker. The guard meter can break.
+- 💥 **Super move** — a meter under the HP bar. Each weapon has its own super.
+- 💊 **Pickups** — a heal kit, a speed boost and a bomb. The AI runs to a pickup or away from a bomb. How often they drop is a setting.
+- 🏯 **Five arenas**, each with its own hall and one mechanic. Pick one, or **random** (the default). Mechanics can be turned off; the hall stays.
 - 🔔 **Rounds** (1 / 3 / 5 / to KO) with a ring card girl, judges' scores, corner trainers with water, towel & fan.
-- 🎙️ **Announcer** and corner advice, fully localized (English / Russian).
+- 🎙️ **Announcer** and corner advice, fully localized (English / Russian). The arena name shows briefly at the start.
 - 🏆 **Tournaments** — single elimination for up to 16 fighters, animated bracket, podium & confetti.
-- 🔊 **Sound** — per-weapon hits, whooshes, crits, KO, bell/gong, crowd ambience & cheers, fanfare.
-- 🖥️ **GPU crowd shader** with a Canvas fallback, auto-fit to your monitor, 🍃 eco mode while gaming.
+- 🖼️ **Match setup window** — pixel card, grouped controls, a "More" block, short animations, and tooltips that wait ~0.7 s and hide when the pointer leaves. It does not close itself on a timer.
+- 👊 **Desktop widget `crew`** — a fist button. It opens smoothly into two cells: drag a person from the call into a cell (they stand still, full body). **Add a bot** fills an empty cell. When both are filled, **Fight!** opens the match setup with those two.
+- 🔊 **Sound** — per-weapon hits, whooshes, crits, KO, bell/gong, crowd, block, parry, super, pickups.
+- 🖥️ **GPU crowd shader** with a Canvas fallback, auto-fit to your monitor, 🍃 eco mode.
 - 🎨 Works in both AngelOS looks (Pixel and macOS / Golden Gate).
+
+### 🏯 Arenas
+
+| Arena | Hall | Mechanic |
+|---|---|---|
+| Dojo | tatami room | the edge of the mat is slick |
+| Desert | sand and sun | a sandstorm pushes the fighters |
+| Fjord | cliffs, dark water, ice, firs | the floor is icy |
+| Plaza | festival square | the crowd celebrates in the centre |
+| Terem | wooden hall and snow | snow drifts by the fence |
+
+Random picks one hall per fight and crossfades the thumbnail in the setup window. With mechanics off, only the picture changes.
 
 ### 🗡️ Weapons
 
@@ -46,23 +64,27 @@
 
 <table>
 <tr>
-<td><img src="screenshots/ru-intro.png" alt="Intro"></td>
-<td><img src="screenshots/ru-fight.png" alt="Fight"></td>
+<td><img src="screenshots/desk-closed.png" alt="Collapsed fist button"></td>
+<td><img src="screenshots/desk-open.png" alt="Desktop widget with two cells"></td>
 </tr>
 <tr>
-<td><img src="screenshots/ru-win.png" alt="Podium"></td>
+<td><img src="screenshots/setup.png" alt="Match setup window"></td>
+<td><img src="screenshots/fjord.png" alt="Fjord arena"></td>
+</tr>
+<tr>
+<td><img src="screenshots/ru-fight.png" alt="A fight"></td>
 <td><img src="screenshots/settings.png" alt="Settings page"></td>
 </tr>
 </table>
 
 ## 📦 Install
 
-**AngelOS Store:** Settings → Plugins → Community → *Crew Fight* (once the listing is approved).
+**AngelOS Store:** Settings → Plugins → Community → *Crew Fight* (once the 2.1.0 listing is approved).
 
 **One-liner:**
 
 ```bash
-mkdir -p ~/.config/angelos/plugins && curl -fsSL https://github.com/AbobaAI/angelos-crew-fight/releases/download/v2.0.0/crew-fight-v2.0.0.zip -o /tmp/crew-fight.zip && unzip -oq /tmp/crew-fight.zip -d ~/.config/angelos/plugins/crew-fight && ~/.config/quickshell/angelos/bin/angelos restart
+mkdir -p ~/.config/angelos/plugins && curl -fsSL https://github.com/AbobaAI/angelos-crew-fight/releases/download/v2.1.0/crew-fight-v2.1.0.zip -o /tmp/crew-fight.zip && unzip -oq /tmp/crew-fight.zip -d ~/.config/angelos/plugins/crew-fight && ~/.config/quickshell/angelos/bin/angelos restart
 ```
 
 **Manual:**
@@ -97,6 +119,7 @@ the picker tells you why and offers demo fighters.
 
 ## 🎮 Usage
 
+- 👊 **Desktop widget** `crew` (add it with the other desktop widgets). Click the fist. Drop a walking person into a cell, or press **Add a bot**. **Fight!** opens the match setup with those two.
 - 🔎 **Launcher** (Mod+Space / Spotlight): `fight`, `crew fight`, `tournament`
 - 🖱️ **Desktop right-click:** *Crew Fight* / *Crew Tournament*
 - ⌨️ **Keybind** (optional) — add to `~/.config/niri/cfg/user.kdl`:
@@ -119,14 +142,24 @@ binds {
 | `tour` · `tournament rounds` | tournament of everyone in the call |
 | `demoTournament` · `demoTournamentN n rounds` | demo tournament (n = 2–16) |
 | `weapons` · `status` · `stop` | weapon list · JSON state · stop |
+| `shield` · `superMove` · `pickups` | `on` / `off` / `toggle` |
+| `pickupRate rare\|normal\|often` | how often pickups drop |
+| `arena random\|dojo\|desert\|fjord\|plaza\|terem` | the next hall |
+| `arenaFx on\|off\|toggle` | arena mechanics |
 
 ## ⚙️ Settings
 
-Settings → Plugins → Crew Fight, or IPC (persisted the same way):
+Settings → Plugins → Crew Fight, or the match window's **More** block, or IPC (persisted the same way):
 
 | Setting | IPC | Default |
 |---|---|---|
 | Default rounds | `rounds 1\|3\|5\|ko` | `1` |
+| Arena | `arena random\|dojo\|desert\|fjord\|plaza\|terem` | `random` |
+| Arena mechanics | `arenaFx on\|off\|toggle` | on |
+| Shield | `shield on\|off\|toggle` | on |
+| Super move | `superMove on\|off\|toggle` | on |
+| Pickups | `pickups on\|off\|toggle` | on |
+| Pickup rate | `pickupRate rare\|normal\|often` | `normal` |
 | Arena name (hall banners) | `arenaName NAME` | `CREW ARENA` |
 | Announcer & UI language | `language auto\|ru\|en` | `auto` (as AngelOS) |
 | Sound on/off · volume | `sound on\|off\|toggle` · `volume 0-100` | on · `50` |
@@ -146,7 +179,7 @@ also after a crash or shell reload.
 
 ## 🔊 Sounds
 
-All 22 sounds were synthesised from scratch with ffmpeg by [`sounds/gen.sh`](sounds/gen.sh) — no
+The wav files in [`sounds/`](sounds/) were synthesised from scratch with ffmpeg by [`sounds/gen.sh`](sounds/gen.sh) — no
 samples, no sound packs — and are released under **CC0 1.0** ([`sounds/LICENSES.txt`](sounds/LICENSES.txt)).
 Default volume is a moderate 50% (perceptual curve).
 

@@ -92,7 +92,6 @@ PanelWindow {
         sm.title = arenaTitle();
         g.banner = sm.title;
         g.say = tl("Дааамы и господааа! Добро пожаловать на бой года!", "Ladies and gentlemen! Welcome to the fight of the year!");
-        snapEv("arena", 500);
         tick.last = 0; tick.start();
         hallBg.requestPaint(); staticCv.requestPaint(); ropeBack.requestPaint(); ropeFront.requestPaint(); annCv.requestPaint(); trCv.requestPaint(); scanCv.requestPaint(); vigCv.requestPaint();
         fadeIn.start();
@@ -281,7 +280,6 @@ PanelWindow {
             addPart(hx, hy, Math.cos(bang) * bsp, Math.sin(bang) * bsp, 0.15, 12 + Math.random() * 8, iceCols[(Math.random() * 3) | 0], 4);
             bi++;
         }
-        snapEv(perfect ? "parry" : "block", 90);
         floatText(hx, hy - 24, perfect ? tl("ИДЕАЛЬНЫЙ БЛОК!", "PERFECT BLOCK!") : tl("БЛОК!", "BLOCK!"), perfect ? "#ffffff" : "#7fe0ff", perfect);
         if (d > 0) floatText(hx, hy - 4, "−" + d, "#bff3ff", false);
         if (perfect) {
@@ -295,7 +293,7 @@ PanelWindow {
         if (def.gd <= 0 && def.st === "block") {
             def.gd = 0; def.st = "hurt"; def.t = 20; def.stun = 30; def.blkCd = 90; def.squash = 6;
             sm.st.gb[def.side]++;
-            floatText(def.x, fy - def.y - 150, tl("ЩИТ РАЗБИТ!", "GUARD BREAK!"), "#ff8a3d", true); snapEv("guard", 80);
+            floatText(def.x, fy - def.y - 150, tl("ЩИТ РАЗБИТ!", "GUARD BREAK!"), "#ff8a3d", true);
             sparks(def.x, fy - def.y - 60, 16, true, null, ["#7fe0ff", "#ffffff"]);
             g.sfx("crit", 0.5);
         }
@@ -358,7 +356,6 @@ PanelWindow {
         sm.vig = 1; sm.cam = 36; sm.punch = Math.max(sm.punch, 0.1); sm.px = f.x; sm.py = fy - 90; sm.scan = 14;
         floatText(f.x, fy - f.y - 175, mv.n + "!", "#ffd34d", true, 0, -0.4);
         comment(rnd(tl([f.who.name + ": СУПЕРУДАР «" + mv.n + "»!", "Зал замер! Сейчас будет больно!", f.who.name + " заряжает что-то ужасное!"], [f.who.name + ": SUPER MOVE “" + mv.n + "”!", "The hall goes silent! This will hurt!", f.who.name + " is charging something terrible!"])), true);
-        snapEv("supercharge", 330);
     }
     function superStrike(f, e, i, mv) {
         const first = i === 0;
@@ -377,7 +374,6 @@ PanelWindow {
         sm.shake = Math.max(sm.shake, 12); sm.cam = 40; sm.punch = Math.min(0.3, sm.punch + 0.1); sm.scan = 8;
         if (first) {
             g.sfx("super", 1); g.sfx("cheer", 0.6);
-            snapEv("super", 190);
         }
         switch (mv.fx) {
         case "tsunami": splash(e.x, fy - 90); splash(e.x - 30, fy - 60); splash(e.x + 30, fy - 60); addRing(e.x, fy - 4, 10, 26, 0, "#ffffff"); break;
@@ -408,7 +404,6 @@ PanelWindow {
         sm.items.push({ "id": ++sm.itemN, "k": kind, "x": x, "y": 320, "vy": 0, "vx": 0, "st": "fall", "t": 0, "life": 330, "fuse": 0, "slot": slot, "thrown": false, "bounced": false });
         sm.st.pk.drop++;
         g.sfx("drop", 0.7);
-        snapEv("drop", 900);
     }
     function bombNear(f) {
         for (const it of sm.items) if (it.k === "bomb" && it.st === "fuse" && it.fuse > 8 && Math.abs(f.x - it.x) < 135) return it;
@@ -441,7 +436,6 @@ PanelWindow {
             addRing(f.x, fy - 6, 8, 16, 0, "#3ddc84");
             floatText(f.x, fy - f.y - 140, "+" + H + " HP", "#3ddc84", true);
             comment(rnd(tl([f.who.name + " хватает аптечку!", "Аптечка! Свежие силы!", f.who.name + " подлатался!"], [f.who.name + " grabs the heal kit!", "A heal kit! Fresh strength!", f.who.name + " patches up!"])));
-            snapEv("heal", 140);
         } else if (it.k === "speed") {
             f.spd = 210;
             sm.st.pk.speed++;
@@ -450,7 +444,6 @@ PanelWindow {
             addRing(f.x, fy - 6, 8, 14, 0, "#ffe066");
             floatText(f.x, fy - f.y - 140, tl("УСКОРЕНИЕ!", "SPEED UP!"), "#ffe066", true);
             comment(rnd(tl([f.who.name + " ускоряется! Не моргай!", "Ускорение! Это уже не бокс, это Формула-1!"], [f.who.name + " speeds up! Don't blink!", "Speed boost! This isn't boxing anymore, it's Formula 1!"])));
-            snapEv("speed", 650);
         } else {
             // the bomb: grabbed and lobbed straight at the rival, a fresh short fuse
             it.st = "fly"; it.thrown = true; it.own = f; it.y = 55; it.t = 0;
@@ -478,7 +471,6 @@ PanelWindow {
             bi++;
         }
         floatText(it.x, fy - 120, "BOOM!", "#ffb347", true);
-        snapEv("boom", 170);
         const dead = [];
         for (const f of sm.f) {
             const dx = f.x - it.x, d = Math.abs(dx);
@@ -506,7 +498,6 @@ PanelWindow {
     }
     function stepItems(dt) {
         var i = 0, n, w = 0, it, fa, fb, got, f;
-        if (g.dbgSpawn) { if (sm.phase === "fight") spawnItem(g.dbgSpawn); g.dbgSpawn = ""; }
         if (sm.phase !== "fight") { if (sm.items.length) sm.items.length = 0; return; }
         if (g.pickupsOn) { sm.itemT -= dt; if (sm.itemT <= 0) { spawnItem(); sm.itemT = itemGap() * (0.7 + Math.random() * 0.6); } }
         n = sm.items.length;
@@ -528,7 +519,7 @@ PanelWindow {
             } else if (it.st === "ready") {
                 it.life -= dt;
                 if (it.life <= 0) { sparks(it.x, fy - 20, 8, false, null, ["#ffffff"]); continue; }
-                if (it.k === "bomb" && it.t > 105) { it.st = "fuse"; it.fuse = 70; g.sfx("fuse", 0.8); snapEv("fuse", 500); }
+                if (it.k === "bomb" && it.t > 105) { it.st = "fuse"; it.fuse = 70; g.sfx("fuse", 0.8); }
             } else if (it.st === "fuse") {
                 it.fuse -= dt;
                 if (it.fuse <= 0) { explode(it); continue; }
@@ -1185,7 +1176,6 @@ PanelWindow {
         if (!sm || !g.on) return;
         sm.dt = dt;
         sm.frame += dt;
-        if (g.dbgCharge) { g.dbgCharge = false; sm.f[0].sp = 100; sm.f[1].sp = 100; }
         stepGust(dt);
         stepRoundFlow(dt);
         stepItems(dt);
@@ -1410,40 +1400,6 @@ PanelWindow {
         jRound = tl("РАУНД ", "ROUND ") + Math.max(1, s.round) + (g.rounds ? "/" + g.rounds : "") + (g.timerTxt ? "  ·  " + g.timerTxt : "");
         gustTxt = g.arenaFx && arenaId === "desert" && s.gustT > 0 ? (s.gustD > 0 ? "▶  ▶  ▶" : "◀  ◀  ◀") : "";
     }
-    // test helper: grab the arena item itself (never the screen) when an event fires: IPC snap <events|all> <dir>
-    property var snapN: ({})
-    property var snapQ: []
-    function snapEv(ev, delay) {
-        var n, q;
-        if (!g.snapDir || (g.snapEv !== "all" && ("," + g.snapEv + ",").indexOf("," + ev + ",") < 0)) return;
-        n = snapN[ev] || 0;
-        if (n >= 3) return;
-        snapN[ev] = n + 1;
-        // reassign so the shot timer notices the queue (in-place push does not)
-        q = snapQ.slice();
-        q.push({ "at": Date.now() + (delay || 100), "path": g.snapDir + "/" + ev + "-" + (n + 1) + ".png" });
-        snapQ = q;
-    }
-    function grabSnap(path) {
-        if (!stage) return;
-        stage.grabToImage(function (res) {
-            if (res) res.saveToFile(path);
-            console.info("crew-fight shot " + path);
-        });
-    }
-    Timer {
-        interval: 25; repeat: true; running: ar.snapQ.length > 0
-        onTriggered: {
-            var src = ar.snapQ, i = 0, n = src.length, kept = [], now = Date.now(), item;
-            if (!stage) { ar.snapQ = kept; return; }
-            while (i < n) {
-                item = src[i++];
-                if (item.at <= now) ar.grabSnap(item.path);
-                else kept.push(item);
-            }
-            ar.snapQ = kept;
-        }
-    }
     function simStep(raw) {
         var s = sm, dt;
         if (!s || !g || !g.on) return false;
@@ -1459,7 +1415,7 @@ PanelWindow {
         repeat: true
         property real last: 0
         onTriggered: {
-            var now = Date.now(), frameTime = last ? Math.min(0.1, (now - last) / 1000) : 0.016, ft, k;
+            var now = Date.now(), frameTime = last ? Math.min(0.1, (now - last) / 1000) : 0.016, ft;
             last = now;
             if (!ar.g || !ar.g.on || !ar.sm) { stop(); return; }
             // vsync-driven, but the sim + scene update is capped at ~60 Hz (high-refresh outputs would otherwise redraw 200x/s)
@@ -1469,12 +1425,6 @@ PanelWindow {
             if (ar.g.eco && (++ar.ecoN & 1)) return;      // every second ~60 Hz step
             ft = Math.min(0.066, ar.paintAcc); ar.paintAcc = 0;
             ar.perfTick(ft);
-            if (ar.g.turbo > 1) {
-                k = 0;
-                while (k < ar.g.turbo && ar.sm && ar.g.on) { ar.simStep(0.5); k++; }
-                if (ar.sm && ar.g.on) { ar.applyCam(); ar.paintLayers(); }
-                return;
-            }
             if (!ar.simStep(ft * 30)) { if (ar.sm) ar.applyCam(); return; }
             if (!ar.sm || !ar.g.on) return;
             ar.applyCam();

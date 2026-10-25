@@ -61,11 +61,6 @@ Item {
     readonly property string arenaPick: ["dojo", "desert", "fjord", "plaza", "terem"].indexOf(String(cfg("gpArena", "random"))) >= 0 ? String(cfg("gpArena", "random")) : "random"
     readonly property bool arenaFx: cfg("gpArenaFx", true) !== false
     property string arenaNow: ""
-    property bool dbgCharge: false
-    property string dbgSpawn: ""
-    property string snapEv: ""            // test helper: save the arena (not the screen) as a PNG when these events fire
-    property string snapDir: ""
-    property int turbo: 1                 // test helper: N simulation steps per tick, no sound
     property string lastResult: ""
     property real spA: 0
     property real spB: 0
@@ -86,7 +81,7 @@ Item {
     readonly property var sfxNames: ["punch", "slap", "crack", "homerun", "splat", "feedback", "boom", "clack", "keys", "thud", "zap", "whoosh", "crit", "ko", "gong", "bell", "cheer", "sting", "fanfare", "swoosh", "blip", "block", "parry", "supercharge", "super", "heal", "boost", "fuse", "drop"]
     property var sfxLast: ({})
     function sfx(name, gain) {
-        if (!soundOn || soundVol <= 0 || turbo > 1) return;
+        if (!soundOn || soundVol <= 0) return;
         const it = sfxRep.itemAt(sfxNames.indexOf(name));
         if (!it) return;
         const now = Date.now();
@@ -472,8 +467,6 @@ Item {
     property string wpA: "random"
     property string wpB: "random"
     property int pickRounds: 1
-    property string pickShot: ""
-    property string pickHall: ""
     function openPicker() {
         if (!live) return "stale copy";
         first = null; second = null; wpA = "random"; wpB = "random";
@@ -562,39 +555,6 @@ Item {
         // arena: random | dojo | desert | fjord | plaza | terem ; mechanics: on | off | toggle
         function arena(v: string): string { const ids = ["random", "dojo", "desert", "fjord", "plaza", "terem"]; const a = ids.indexOf(v) >= 0 ? v : "random"; root.setCfg("gpArena", a); return "arena " + a; }
         function arenaFx(v: string): string { const o = v === "toggle" ? !root.arenaFx : v !== "off" && v !== "0"; root.setCfg("gpArenaFx", o); return "arena fx " + (o ? "on" : "off"); }
-        // test helpers (not in the README): turbo N = N sim steps per tick, silent
-        function charge(): string { root.dbgCharge = true; return "super meters filled"; }
-        function spawn(kind: string): string { root.dbgSpawn = kind || "heal"; return "spawn " + kind; }
-        function snap(ev: string, dir: string): string { root.snapEv = ev; root.snapDir = dir; return "snap " + ev + " -> " + dir; }
-        function turbo(n: string): string { root.turbo = Math.max(1, Math.min(60, parseInt(n) || 1)); return "turbo " + root.turbo; }
-        // test helper (not in the README): open the picker on demo fighters and save the card
-        function desk(v: string): string {
-            if (v === "fill") {
-                Desk.expanded = true;
-                Desk.put(0, root.fakes[0]);
-                Desk.put(1, root.fakes[1]);
-                return "desk filled";
-            }
-            if (v === "clear") {
-                Desk.clear(0);
-                Desk.clear(1);
-                Desk.expanded = false;
-                return "desk cleared";
-            }
-            Desk.expanded = v !== "off" && v !== "0";
-            return Desk.expanded ? "desk open" : "desk closed";
-        }
-        function pickShot(path: string, hall: string): string {
-            const r = root.openPicker();
-            root.pickDemo = true;
-            root.first = root.fakes[0];
-            root.second = root.fakes[1];
-            root.wpA = "fists";
-            root.wpB = "slipper";
-            root.pickHall = String(hall || "");
-            root.pickShot = String(path || "");
-            return r + " shot";
-        }
         // sound: on | off | toggle ; volume: 0-100 (persisted)
         function sound(state: string): string { return root.setSound(state === "toggle" ? !root.soundOn : state !== "off" && state !== "0"); }
         function volume(v: string): string { return root.setSound(undefined, parseInt(v) || 0); }

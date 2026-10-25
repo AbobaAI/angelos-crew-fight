@@ -61,7 +61,6 @@ PanelWindow {
     property real tipY: 8
     property bool tipShow: false
     property var tipItem: null
-    property bool shotDone: false
 
     function hallAt(i) {
         if (i === 1) return "desert"
@@ -171,12 +170,7 @@ PanelWindow {
         tipY = y
     }
 
-    function applyShotHall() {
-        if (game.pickShot !== "" && game.pickHall !== "")
-            arenaId = game.pickHall
-    }
     Component.onCompleted: {
-        applyShotHall()
         dimIn = 1
         cardIn = 1
         keys.forceActiveFocus()
@@ -186,12 +180,6 @@ PanelWindow {
         target: win.game
         function onFirstChanged() { win.bumpFaces() }
         function onSecondChanged() { win.bumpFaces() }
-        function onPickShotChanged() {
-            if (win.game.pickShot !== "")
-                win.shotDone = false
-            win.applyShotHall()
-        }
-        function onPickHallChanged() { win.applyShotHall() }
     }
 
     SequentialAnimation {
@@ -239,27 +227,6 @@ PanelWindow {
             if (!win.tipItem) return
             win.placeTip()
             win.tipShow = true
-        }
-    }
-    Timer {
-        id: shotClose
-        interval: 150
-        onTriggered: win.game.picking = false
-    }
-    Timer {
-        interval: 900
-        repeat: false
-        running: win.game.pickShot !== "" && !win.shotDone
-        onTriggered: {
-            win.shotDone = true
-            var path = win.game.pickShot
-            cardHost.grabToImage(function (res) {
-                if (res) res.saveToFile(path)
-                console.info("crew-fight picker shot " + path)
-                win.game.pickHall = ""
-                win.game.pickShot = ""
-                shotClose.start()
-            })
         }
     }
     Shortcut {

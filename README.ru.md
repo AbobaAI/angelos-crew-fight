@@ -4,10 +4,10 @@
 
 # 🥊 Драка человечков
 
-**Пиксельный бокс между людьми из твоего звонка Discord — прямо на рабочем столе AngelOS.**
+**Пиксельный бой людей из твоего звонка Discord — прямо на рабочем столе AngelOS.**
 
 [![AngelOS](https://img.shields.io/badge/AngelOS-релиз%206%2B-e8668b?style=flat-square)](https://github.com/futureUnd1ground/angelos-community-registry)
-[![Version](https://img.shields.io/badge/version-2.0.0-6ec3e8?style=flat-square)](https://github.com/AbobaAI/angelos-crew-fight/releases/tag/v2.0.0)
+[![Version](https://img.shields.io/badge/version-2.1.0-6ec3e8?style=flat-square)](https://github.com/AbobaAI/angelos-crew-fight/releases/tag/v2.1.0)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8bd17c?style=flat-square)](LICENSE)
 [![Sounds: CC0](https://img.shields.io/badge/звуки-CC0-f0b44c?style=flat-square)](sounds/LICENSES.txt)
 [![Languages](https://img.shields.io/badge/lang-ru%20%7C%20en-b48cf0?style=flat-square)](README.md)
@@ -22,12 +22,30 @@
 
 - 👥 **Настоящие бойцы** — «Человечки из звонка Discord», которых AngelOS уже рисует над панелью; нет звонка → демо-бойцы.
 - ⚔️ **8 видов оружия**, по 3 приёма и добивание, комбо, криты, отбрасывание, оглушение.
+- 🛡️ **Щит** — бойцы сами закрываются (урон ×0.2). Идеальный блок оглушает атакующего. Шкалу блока можно проломить.
+- 💥 **Суперудар** — шкала под здоровьем. У каждого оружия свой суперудар.
+- 💊 **Бонусы** — аптечка, ускорение и бомба. Искусственный интеллект бежит к бонусу или от бомбы. Частоту выпадения можно настроить.
+- 🏯 **Пять арен**, у каждой свой зал и одна механика. Можно выбрать зал или **случайную** арену (так по умолчанию). Механики выключаются отдельно, картинка зала остаётся.
 - 🔔 **Раунды** (1 / 3 / 5 / до нокаута) с девушкой с табличкой, очки судей, тренеры в углах с водой, полотенцем и веером.
-- 🎙️ **Комментатор** и советы из углов — на русском и английском.
+- 🎙️ **Комментатор** и советы из углов — на русском и английском. Название арены коротко показывается в начале боя.
 - 🏆 **Турнир** на выбывание до 16 бойцов, анимированная сетка, пьедестал и конфетти.
-- 🔊 **Звук** — удары у каждого оружия, свист замаха, крит, нокаут, гонг, гул толпы и овации, фанфары.
-- 🖥️ **Толпа на GPU-шейдере** с запасным вариантом на Canvas, авторазмер под монитор, 🍃 эко-режим для игр.
+- 🖼️ **Окно настроек матча** — пиксельная карточка, группы, блок «Дополнительно», короткие анимации и подсказки (пауза ~0,7 с, гаснут, если курсор ушёл). Само по таймеру окно не закрывается.
+- 👊 **Виджет рабочего стола `crew`** — кнопка с кулаком. Плавно раскрывается в две ячейки: перетащи человечка из звонка (в ячейке он стоит целиком и не шагает). **Добавить бота** ставит демо-бойца в свободную ячейку. Когда обе заняты, **В бой!** открывает окно матча именно с этими двумя.
+- 🔊 **Звук** — удары, замахи, крит, нокаут, гонг, толпа, блок, парирование, супер, бонусы.
+- 🖥️ **Толпа на GPU-шейдере** с запасным вариантом на Canvas, авторазмер под монитор, 🍃 эко-режим.
 - 🎨 Обе темы AngelOS (пиксельная и macOS / Golden Gate).
+
+### 🏯 Арены
+
+| Арена | Зал | Механика |
+|---|---|---|
+| Додзё | комната с татами | край татами скользкий |
+| Пустыня | песок и солнце | песчаная буря толкает бойцов |
+| Фьорд | скалы, тёмная вода, лёд, ёлки | пол скользкий |
+| Площадь | праздничная площадь | в центре праздник |
+| Терем | деревянный зал и снег | снег у забора |
+
+«Случайная» выбирает один зал на бой, а миниатюра в окне матча плавно листает залы. Если механики выключены, меняется только картинка.
 
 ### 🗡️ Оружие
 
@@ -38,31 +56,35 @@
 | 🏏 | Бита | замах · удар сверху · хоумран | ХОУМРАН! УЛЕТЕЛ! |
 | 🐟 | Рыба | рыбья пощёчина · рыба-попрыгунья · рыбный удар сверху | РЫБНЫЙ ДЕНЬ |
 | 🎤 | Микрофон *(дальний)* | звуковая волна · фидбэк · микрофоном по лбу | MIC DROP |
-| ⌨️ | Клавиатура | клавой по голове · дождь клавиш · удар пробелом | ALT+F4 |
-| 🥖 | Батон *(лечит)* | батоном · перекус · батон-бумеранг | ХЛЕБНУЛ ГОРЯ |
-| 🔴 | Лазер-указка *(редкий, дальний)* | заряженный луч · глаза-лазеры · рукояткой | ЛАЗЕР НА МАКСИМУМ |
+| ⌨️ | Клавиатура | клавиатурой по голове · дождь клавиш · удар пробелом | ALT+F4 |
+| 🥖 | Багет *(лечит)* | удар багетом · перекус · багет-бумеранг | ПОДЖАРЕН |
+| 🔴 | Лазерная указка *(редкое, дальнее)* | заряженный луч · лазер из глаз · удар рукояткой | ЛАЗЕР НА МАКСИМУМ |
 
-## 📸 Скриншоты
+## 📸 Снимки
 
 <table>
 <tr>
-<td><img src="screenshots/ru-intro.png" alt="Выход бойцов"></td>
-<td><img src="screenshots/ru-fight.png" alt="Бой"></td>
+<td><img src="screenshots/desk-closed.png" alt="Свёрнутая кнопка-кулак"></td>
+<td><img src="screenshots/desk-open.png" alt="Виджет с двумя ячейками"></td>
 </tr>
 <tr>
-<td><img src="screenshots/ru-win.png" alt="Пьедестал"></td>
-<td><img src="screenshots/settings.png" alt="Настройки"></td>
+<td><img src="screenshots/setup.png" alt="Окно настроек матча"></td>
+<td><img src="screenshots/fjord.png" alt="Арена Фьорд"></td>
+</tr>
+<tr>
+<td><img src="screenshots/ru-fight.png" alt="Бой"></td>
+<td><img src="screenshots/settings.png" alt="Страница настроек"></td>
 </tr>
 </table>
 
 ## 📦 Установка
 
-**Магазин AngelOS:** Настройки → Плагины → Community → *Драка человечков* (после одобрения).
+**Магазин AngelOS:** Настройки → Плагины → Сообщество → «Драка человечков» (когда запись 2.1.0 одобрят).
 
 **Одной командой:**
 
 ```bash
-mkdir -p ~/.config/angelos/plugins && curl -fsSL https://github.com/AbobaAI/angelos-crew-fight/releases/download/v2.0.0/crew-fight-v2.0.0.zip -o /tmp/crew-fight.zip && unzip -oq /tmp/crew-fight.zip -d ~/.config/angelos/plugins/crew-fight && ~/.config/quickshell/angelos/bin/angelos restart
+mkdir -p ~/.config/angelos/plugins && curl -fsSL https://github.com/AbobaAI/angelos-crew-fight/releases/download/v2.1.0/crew-fight-v2.1.0.zip -o /tmp/crew-fight.zip && unzip -oq /tmp/crew-fight.zip -d ~/.config/angelos/plugins/crew-fight && ~/.config/quickshell/angelos/bin/angelos restart
 ```
 
 **Вручную:**
@@ -73,21 +95,21 @@ cp -a angelos-crew-fight ~/.config/angelos/plugins/crew-fight
 ~/.config/quickshell/angelos/bin/angelos restart     # или включи в Настройки → Плагины
 ```
 
-Нужен **AngelOS релиз 6 («2004»)** или новее. QtMultimedia (звук) уже есть в Qt AngelOS.
+Нужен **AngelOS релиз 6 («2004»)** или новее. QtMultimedia (звук) уже есть в Qt из AngelOS.
 
-## 🎧 Настройка Discord
+## 🎧 Discord
 
-**Своего подключения к Discord у плагина нет** — он берёт звонок у AngelOS (`services/DiscordVoice`).
-Сначала включи **«Человечки из звонка Discord»** (ПКМ по рабочему столу → виджеты или
-`qs -c angelos ipc call angelos discordCrew` — переключатель).
+У плагина **нет своего подключения к Discord** — он читает звонок, который AngelOS уже читает
+(`services/DiscordVoice`). Сначала включи **Человечков из звонка Discord** (ПКМ по рабочему столу
+→ виджеты, или `qs -c angelos ipc call angelos discordCrew`).
 
-| Клиент | Как AngelOS видит звонок | Что сделать |
+| Клиент | Как AngelOS видит звонок | Что нужно |
 |---|---|---|
 | **Discord** (официальный) | локальный RPC `ws://127.0.0.1:6463–6472` | один раз подтвердить запрос в Discord |
-| **Vesktop / Equibop / Legcord** | в arRPC нет голосового RPC → мост AngelOS через DevTools (по желанию) | запустить клиент с портом DevTools на 127.0.0.1 и записать `{"port": N}` в `~/.config/angelos/discord-voice.json` (или `$XDG_RUNTIME_DIR/angelos-discord-voice.json`, или `ANGELOS_DISCORD_CDP_PORT`) |
+| **Vesktop / Equibop / Legcord** | у arRPC нет голосового RPC → мост DevTools AngelOS | запустить клиент с loopback-портом DevTools и записать `{"port": N}` в `~/.config/angelos/discord-voice.json` (или `$XDG_RUNTIME_DIR/angelos-discord-voice.json`, или `ANGELOS_DISCORD_CDP_PORT`) |
 
-Если человечки выключены, Discord не запущен, ты не в голосовом или отвечает только arRPC — окно
-выбора скажет, в чём дело, и предложит демо-бойцов.
+Если человечки выключены, Discord не запущен, ты не в голосовом канале или отвечает только arRPC,
+окно выбора скажет, в чём дело, и предложит демо-бойцов.
 
 > [!WARNING]
 > Порт DevTools (удалённой отладки) даёт полный контроль над клиентом Discord всему, что до него
@@ -97,6 +119,7 @@ cp -a angelos-crew-fight ~/.config/angelos/plugins/crew-fight
 
 ## 🎮 Как запустить
 
+- 👊 **Виджет** `crew` (включается вместе с другими виджетами рабочего стола). Нажми кулак. Перетащи гуляющего человечка в ячейку или нажми **Добавить бота**. **В бой!** открывает окно матча с этими двумя.
 - 🔎 **Лаунчер** (Mod+Space / Spotlight): `fight`, `драка человечков`, `турнир`
 - 🖱️ **ПКМ по рабочему столу:** «Драка человечков» / «Турнир человечков»
 - ⌨️ **Горячая клавиша** (по желанию) — в `~/.config/niri/cfg/user.kdl`:
@@ -119,14 +142,24 @@ binds {
 | `tour` · `tournament rounds` | турнир всех из звонка |
 | `demoTournament` · `demoTournamentN n rounds` | демо-турнир (n = 2–16) |
 | `weapons` · `status` · `stop` | список оружия · состояние JSON · стоп |
+| `shield` · `superMove` · `pickups` | `on` / `off` / `toggle` |
+| `pickupRate rare\|normal\|often` | как часто падают бонусы |
+| `arena random\|dojo\|desert\|fjord\|plaza\|terem` | следующий зал |
+| `arenaFx on\|off\|toggle` | механики арен |
 
 ## ⚙️ Настройки
 
-Настройки → Плагины → Драка человечков или IPC (сохраняются одинаково):
+Настройки → Плагины → Драка человечков, блок «Дополнительно» в окне матча или IPC (сохраняются одинаково):
 
 | Настройка | IPC | По умолчанию |
 |---|---|---|
 | Раунды по умолчанию | `rounds 1\|3\|5\|ko` | `1` |
+| Арена | `arena random\|dojo\|desert\|fjord\|plaza\|terem` | `random` |
+| Механики арен | `arenaFx on\|off\|toggle` | вкл |
+| Щит | `shield on\|off\|toggle` | вкл |
+| Суперудар | `superMove on\|off\|toggle` | вкл |
+| Бонусы | `pickups on\|off\|toggle` | вкл |
+| Частота бонусов | `pickupRate rare\|normal\|often` | `normal` |
 | Название арены (баннеры) | `arenaName ИМЯ` | `CREW ARENA` |
 | Язык комментатора и интерфейса | `language auto\|ru\|en` | `auto` (как в AngelOS) |
 | Звук · громкость | `sound on\|off\|toggle` · `volume 0-100` | вкл · `50` |
@@ -146,7 +179,7 @@ binds {
 
 ## 🔊 Звуки
 
-Все 22 звука синтезированы с нуля в ffmpeg скриптом [`sounds/gen.sh`](sounds/gen.sh) — без сэмплов
+Файлы в [`sounds/`](sounds/) синтезированы с нуля в ffmpeg скриптом [`sounds/gen.sh`](sounds/gen.sh) — без сэмплов
 и паков — и выпущены под **CC0 1.0** ([`sounds/LICENSES.txt`](sounds/LICENSES.txt)). Громкость по
 умолчанию — умеренные 50%.
 

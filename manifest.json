@@ -4,11 +4,11 @@
     "ru": "Драка человечков",
     "en": "Crew Fight"
   },
-  "version": "2.1.0-dev",
+  "version": "2.1.0",
   "author": "aboba",
   "description": {
-    "ru": "Пиксельный бой двух человечков из звонка Discord (встроенные «Человечки» AngelOS): оружие, комбо, криты, раунды с девушкой с табличкой, комментатор, турнир с сеткой, пьедестал и звуки. Без звонка — демо-бойцы. Лаунчер «fight», ПКМ по рабочему столу, IPC crewfight.",
-    "en": "A pixel boxing match between two people from your Discord call (AngelOS's built-in crew): weapons, combos, crits, rounds with a ring card girl, an announcer, tournament brackets, a podium and sound. Demo fighters without a call. Launcher “fight”, desktop right-click, IPC crewfight."
+    "ru": "Пиксельный бой двух человечков из звонка Discord: щит с идеальным блоком, суперудар, бонусы, пять арен со своими механиками и виджет crew на рабочем столе. Без звонка — демо-бойцы.",
+    "en": "A pixel fight between two people from your Discord call: a shield with a perfect block, a super move, pickups, five arenas with their own mechanics, and a crew desktop widget. Demo fighters without a call."
   },
   "icon": "heart",
   "enabledByDefault": true,
