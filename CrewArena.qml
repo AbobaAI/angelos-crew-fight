@@ -46,6 +46,22 @@ PanelWindow {
     property real gustVis: 0
     property real gustDir: 1
     property string gustTxt: ""
+    // reused scratch so the 60 Hz tick does not allocate arrays or block scopes
+    property var bin: []
+    property var colBuf: []
+    property var melBuf: []
+    property var rngBuf: []
+    readonly property var spdCols: ["#ffe066", "#fff2a8", "#6ec3e8"]
+    readonly property var sandCols: ["#e0b060", "#f0d090", "#c4922a", "#fff2c8"]
+    readonly property var iceCols: ["#6ec3e8", "#bfe8ff", "#ffffff"]
+    readonly property var healCols: ["#3ddc84", "#9bffb8", "#ffffff", "#5de6a0"]
+    readonly property var boomCols: ["#ff8a3d", "#ffd34d", "#ffffff", "#c0392b", "#444444"]
+    readonly property var keyChars: ["Q", "W", "E", "R", "A", "S", "D", "Z", "Ё", "Й"]
+    readonly property var sprayWru: ["клац!", "тык!"]
+    readonly property var sprayWen: ["clack!", "tap!"]
+    readonly property var sprayMv: ({ "id": "spray", "dm": 0.35, "kb": 0.3, "w": ["клац!", "тык!"] })
+    readonly property var advRu: ["Работай джебом!", "Он открыт слева!", "Дыши, брат, дыши!", "Ты лучший в этом войсе!", "Не забывай про блок!", "Мама смотрит стрим!", "Бей, пока он в AFK!", "Меньше кринжа, больше урона!"]
+    readonly property var advEn: ["Work the jab!", "He's open on the left!", "Breathe, bro, breathe!", "You're the best in this voice chat!", "Don't forget to block!", "Mom's watching the stream!", "Hit them while they're AFK!", "Less cringe, more damage!"]
     readonly property int roundFr: g.rounds === 0 ? 330 : 450
     readonly property real dmgScale: g.rounds === 1 ? 1 : g.rounds === 0 ? 0.8 : g.rounds === 3 ? 0.5 : 0.38
     property var sm: null
@@ -73,7 +89,8 @@ PanelWindow {
                "st": { "blk": [0, 0], "par": [0, 0], "gb": [0, 0], "maxMv": 0, "hits": [0, 0], "sup": [0, 0], "supHit": [0, 0], "pk": { "drop": 0, "heal": 0, "speed": 0, "bomb": 0, "boom": 0, "bombHit": 0, "giveUp": 0 }, "ar": { "slip": 0, "gust": 0, "ice": 0, "party": 0, "snow": 0 } } };
         for (const f of sm.f)
             if (f.img) { fCv0.loadImage(f.img); fCv1.loadImage(f.img); }
-        g.banner = arenaTitle();
+        sm.title = arenaTitle();
+        g.banner = sm.title;
         g.say = tl("Дааамы и господааа! Добро пожаловать на бой года!", "Ladies and gentlemen! Welcome to the fight of the year!");
         snapEv("arena", 500);
         tick.last = 0; tick.start();
@@ -85,34 +102,81 @@ PanelWindow {
     function comment(txt, force) {
         if (force || sm.sayCd <= 0) { g.say = txt; sm.sayCd = 80; g.sayT = 40; if (force && sm.frame - (sm.blipT || -999) > 90) { sm.blipT = sm.frame; g.sfx("blip", 0.35); } }
     }
-    function dust(x, n) {
-        const c = arenaId === "fjord" || arenaId === "terem" ? "#e8f4ff" : arenaId === "desert" ? "#e0b060" : arenaId === "dojo" ? "#d8c8a0" : arenaId === "plaza" ? "#e8d4c0" : "#b9a88a";
-        for (let i = 0; i < n; i++)
-            sm.parts.push({ "x": x + (Math.random() - 0.5) * 30, "y": fy - 2, "vx": (Math.random() - 0.5) * 4, "vy": -Math.random() * 2, "g": 0.05, "life": 18 + Math.random() * 10, "c": c, "s": 4 });
+    // one free-list for sparks, trails, rings and beams. Births pop, deaths push back. No per-frame arrays.
+    function recycle(p) {
+        p.bmp = null; p.wob = undefined;
+        if (bin.length < 280) bin.push(p);
     }
-    function wcols(wp) { return wp ? wp.cols.map(c => c.length === 1 ? g.wcol(c) : c) : []; }
+    function addPart(x, y, vx, vy, grav, life, c, s, wob, bmp, rot) {
+        var p = bin.length ? bin.pop() : {};
+        p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.g = grav; p.life = life; p.c = c; p.s = s;
+        p.wob = wob; p.bmp = bmp || null; p.rot = rot || 0;
+        sm.parts.push(p);
+    }
+    function addRing(x, y, r, life, round, c) {
+        var o = bin.length ? bin.pop() : {};
+        o.x = x; o.y = y; o.r = r; o.life = life; o.round = round ? 1 : 0; o.c = c || "#ffffff";
+        sm.rings.push(o);
+    }
+    function addBeam(x1, x2, y, life, w) {
+        var o = bin.length ? bin.pop() : {};
+        o.x1 = x1; o.x2 = x2; o.y = y; o.life = life; o.w = w;
+        sm.beams.push(o);
+    }
+    function pushTrail(f, x, y) {
+        var t = f.trail, slot, cap = f.spd > 0 ? 6 : 4;
+        if (t.length >= cap) slot = t.pop();
+        else slot = bin.length ? bin.pop() : {};
+        slot.x = x; slot.y = y;
+        t.unshift(slot);
+    }
+    function popTrail(f) {
+        if (!f.trail.length) return;
+        recycle(f.trail.pop());
+    }
+    function dust(x, n) {
+        var c = "#b9a88a", i = 0, id = arenaId;
+        if (id === "fjord" || id === "terem") c = "#e8f4ff";
+        else if (id === "desert") c = "#e0b060";
+        else if (id === "dojo") c = "#d8c8a0";
+        else if (id === "plaza") c = "#e8d4c0";
+        while (i < n) { addPart(x + (Math.random() - 0.5) * 30, fy - 2, (Math.random() - 0.5) * 4, -Math.random() * 2, 0.05, 18 + Math.random() * 10, c, 4); i++; }
+    }
     function sparks(x, y, n, crit, wp, extra) {
-        const cols = [String(cAccent), String(cAccent2), "#ffffff", crit ? String(cDanger) : "#ffe066"].concat(wcols(wp), wcols(wp), extra || []);
-        for (let i = 0; i < n; i++) {
-            const ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * (crit ? 9 : 5);
-            sm.parts.push({ "x": x, "y": y, "vx": Math.cos(ang) * sp, "vy": Math.sin(ang) * sp, "g": 0.25, "life": 12 + Math.random() * 12, "c": rnd(cols), "s": crit ? 5 : 4 });
+        var cols = colBuf, i = 0, j = 0, ang, sp, ch, wc;
+        cols[i++] = String(cAccent); cols[i++] = String(cAccent2); cols[i++] = "#ffffff"; cols[i++] = crit ? String(cDanger) : "#ffe066";
+        if (wp && wp.cols) {
+            wc = wp.cols;
+            while (j < wc.length) { ch = wc[j].length === 1 ? g.wcol(wc[j]) : wc[j]; cols[i++] = ch; cols[i++] = ch; j++; }
+        }
+        if (extra) { j = 0; while (j < extra.length) cols[i++] = extra[j++]; }
+        cols.length = i;
+        j = 0;
+        while (j < n) {
+            ang = Math.random() * 6.283185; sp = 2 + Math.random() * (crit ? 9 : 5);
+            addPart(x, y, Math.cos(ang) * sp, Math.sin(ang) * sp, 0.25, 12 + Math.random() * 12, cols[(Math.random() * i) | 0], crit ? 5 : 4);
+            j++;
         }
     }
     function splash(x, y) {
-        for (let i = 0; i < 14; i++)
-            sm.parts.push({ "x": x, "y": y, "vx": (Math.random() - 0.5) * 5, "vy": -Math.random() * 4, "g": 0.3, "life": 18, "c": rnd(["#6ec3e8", "#bfe8ff", "#ffffff"]), "s": 4 });
+        var i = 0;
+        while (i < 14) { addPart(x, y, (Math.random() - 0.5) * 5, -Math.random() * 4, 0.3, 18, iceCols[(Math.random() * 3) | 0], 4); i++; }
     }
     function confetti() {
-        const cols = g.coats.concat([String(cAccent), String(cAccent2), "#ffffff"]);
-        for (let i = 0; i < 110; i++)
-            sm.parts.push({ "x": 60 + Math.random() * 780, "y": -10 - Math.random() * 180, "vx": (Math.random() - 0.5) * 2, "vy": 1 + Math.random() * 2, "g": 0.03, "life": 170 + Math.random() * 60, "c": rnd(cols), "s": 4, "wob": Math.random() * 6 });
+        var i = 0, cols = colBuf, n = 0, coats = g.coats;
+        while (n < coats.length) cols[n] = coats[n++];
+        cols[n++] = String(cAccent); cols[n++] = String(cAccent2); cols[n++] = "#ffffff";
+        cols.length = n;
+        while (i < 110) { addPart(60 + Math.random() * 780, -10 - Math.random() * 180, (Math.random() - 0.5) * 2, 1 + Math.random() * 2, 0.03, 170 + Math.random() * 60, cols[(Math.random() * n) | 0], 4, Math.random() * 6); i++; }
     }
     function rain(bmp) {
-        for (let i = 0; i < 24; i++)
-            sm.parts.push({ "x": 120 + Math.random() * 660, "y": -20 - Math.random() * 200, "vx": (Math.random() - 0.5) * 2, "vy": 2 + Math.random() * 2, "g": 0.2, "life": 90, "bmp": bmp, "rot": Math.random() * 6, "s": 3 });
+        var i = 0;
+        while (i < 24) { addPart(120 + Math.random() * 660, -20 - Math.random() * 200, (Math.random() - 0.5) * 2, 2 + Math.random() * 2, 0.2, 90, "", 3, undefined, bmp, Math.random() * 6); i++; }
     }
     function floatText(x, y, txt, col, big, vx, vy) {
-        sm.floats.push({ "x": x, "y": y, "t": txt, "c": col, "life": 36, "big": big, "vx": vx || 0, "vy": vy === undefined ? -1.1 : vy });
+        var t = bin.length ? bin.pop() : {};
+        t.x = x; t.y = y; t.t = txt; t.c = col; t.life = 36; t.big = big; t.vx = vx || 0; t.vy = vy === undefined ? -1.1 : vy;
+        sm.floats.push(t);
     }
 
     // ── combat
@@ -168,7 +232,7 @@ PanelWindow {
             sm.px = hx; sm.py = hy;
             sm.sdx = att.face; sm.sdy = (mv.k === "overhead" || mv.k === "spacebar") ? 1 : 0.25;
             sm.shake = Math.max(sm.shake, 3 * pw);
-            sm.rings.push({ "x": hx, "y": hy, "r": 6, "life": 12 + 4 * pw, "round": true, "c": crit ? "#ffe066" : "#ffffff" });
+            addRing(hx, hy, 6, 12 + 4 * pw, 1, crit ? "#ffe066" : "#ffffff");
             if (crit) { sm.flash = Math.max(sm.flash, 4); sm.scan = 6; }
             sm.vig = Math.min(1, sm.vig + 0.25 * pw);
         }
@@ -210,10 +274,12 @@ PanelWindow {
         g.sfx(hitSfx[wp.id] || "punch", 0.25);
         sm.freeze = Math.max(sm.freeze, perfect ? 4 : 2);
         sm.shake = Math.max(sm.shake, perfect ? 6 : 3);
-        sm.rings.push({ "x": hx, "y": hy, "r": 6, "life": 12, "round": true, "c": perfect ? "#ffffff" : "#7fe0ff" });
-        for (let i = 0; i < (perfect ? 18 : 9); i++) {
-            const ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
-            sm.parts.push({ "x": hx, "y": hy, "vx": Math.cos(ang) * sp, "vy": Math.sin(ang) * sp, "g": 0.15, "life": 12 + Math.random() * 8, "c": rnd(["#7fe0ff", "#bff3ff", "#ffffff"]), "s": 4 });
+        addRing(hx, hy, 6, 12, 1, perfect ? "#ffffff" : "#7fe0ff");
+        var bi = 0, bang, bsp, bn = perfect ? 18 : 9;
+        while (bi < bn) {
+            bang = Math.random() * 6.283185; bsp = 2 + Math.random() * 5;
+            addPart(hx, hy, Math.cos(bang) * bsp, Math.sin(bang) * bsp, 0.15, 12 + Math.random() * 8, iceCols[(Math.random() * 3) | 0], 4);
+            bi++;
         }
         snapEv(perfect ? "parry" : "block", 90);
         floatText(hx, hy - 24, perfect ? tl("ИДЕАЛЬНЫЙ БЛОК!", "PERFECT BLOCK!") : tl("БЛОК!", "BLOCK!"), perfect ? "#ffffff" : "#7fe0ff", perfect);
@@ -267,7 +333,7 @@ PanelWindow {
         if (was < 100 && f.sp >= 100) {
             floatText(f.x, fy - f.y - 165, tl("СУПЕР ГОТОВ!", "SUPER READY!"), "#ffd34d", true);
             g.sfx("sting", 0.45);
-            for (let i = 0; i < 16; i++) sm.parts.push({ "x": f.x + (Math.random() - 0.5) * 50, "y": fy - f.y - 20 - Math.random() * 90, "vx": (Math.random() - 0.5) * 2, "vy": -1 - Math.random() * 3, "g": 0.02, "life": 24, "c": rnd(["#ffd34d", "#fff2a8", "#ffffff"]), "s": 4 });
+            var si = 0; while (si < 16) { addPart(f.x + (Math.random() - 0.5) * 50, fy - f.y - 20 - Math.random() * 90, (Math.random() - 0.5) * 2, -1 - Math.random() * 3, 0.02, 24, spdCols[(Math.random() * 3) | 0], 4); si++; }
         }
     }
     // weapon-specific supers: n = name, nh = hits, lunge = dash to the target first, fx = extra effect
@@ -298,8 +364,8 @@ PanelWindow {
         const first = i === 0;
         if (first && mv.lunge) {
             const nx = Math.max(ropeL, Math.min(ropeR, e.x - f.face * 56));
-            for (let k = 0; k < 7; k++) f.trail.unshift({ "x": f.x + (nx - f.x) * k / 7, "y": f.y });
-            if (f.trail.length > 4) f.trail.length = 4;
+            var tk = 0; while (tk < 7) { pushTrail(f, f.x + (nx - f.x) * tk / 7, f.y); tk++; }
+            while (f.trail.length > 4) recycle(f.trail.pop());
             dust(f.x, 6); f.x = nx; dust(nx, 8); f.vx = 0;
             // the lunge keeps going on ice, and a slick tatami edge lets it slide a step
             if (g.arenaFx && arenaId === "fjord") f.vx = f.face * (f.spd > 0 ? 8 : 5);
@@ -314,9 +380,9 @@ PanelWindow {
             snapEv("super", 190);
         }
         switch (mv.fx) {
-        case "tsunami": splash(e.x, fy - 90); splash(e.x - 30, fy - 60); splash(e.x + 30, fy - 60); sm.rings.push({ "x": e.x, "y": fy - 4, "r": 10, "life": 26 }); break;
-        case "sonic": for (const r0 of [8, 30, 56]) sm.rings.push({ "x": f.x + f.face * 40, "y": fy - 80, "r": r0, "life": 24, "round": true, "c": "#ffffff" }); sm.beams.push({ "x1": f.x + f.face * 30, "x2": e.x, "y": fy - f.y - 80, "life": 8, "w": 36 }); break;
-        case "orbital": sm.beams.push({ "x1": e.x, "x2": e.x + (f.face > 0 ? 60 : -60), "y": fy - 150, "life": 12, "w": 20 }); sm.beams.push({ "x1": f.x + f.face * 40, "x2": e.x, "y": fy - f.y - 80, "life": 12, "w": 42 }); sm.maxBeam = 10; break;
+        case "tsunami": splash(e.x, fy - 90); splash(e.x - 30, fy - 60); splash(e.x + 30, fy - 60); addRing(e.x, fy - 4, 10, 26, 0, "#ffffff"); break;
+        case "sonic": addRing(f.x + f.face * 40, fy - 80, 8, 24, 1, "#ffffff"); addRing(f.x + f.face * 40, fy - 80, 30, 24, 1, "#ffffff"); addRing(f.x + f.face * 40, fy - 80, 56, 24, 1, "#ffffff"); addBeam(f.x + f.face * 30, e.x, fy - f.y - 80, 8, 36); break;
+        case "orbital": addBeam(e.x, e.x + (f.face > 0 ? 60 : -60), fy - 150, 12, 20); addBeam(f.x + f.face * 40, e.x, fy - f.y - 80, 12, 42); sm.maxBeam = 10; break;
         case "bsod": for (let k = 0; k < 5; k++) floatText(e.x + (Math.random() - 0.5) * 80, fy - 100 - Math.random() * 40, rnd([":(", "0x0000007B", "FATAL", "Ctrl+Alt+Del", "STOP"]), "#ffffff", false, (Math.random() - 0.5) * 4, -2); break;
         case "feast": sparks(f.x + f.face * 30, fy - f.y - 70, 24, true, null, ["#e0b060", "#8a5a2b"]); if (first) { f.hp = Math.min(100, f.hp + 8); g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp; floatText(f.x, fy - f.y - 140, "+8 " + tl("*хрум*", "*crunch*"), String(cOk), false); } break;
         default: for (let k = 0; k < 6; k++) floatText(e.x, fy - 120, "★", "#ffe066", true, (Math.random() - 0.5) * 6, -2 - Math.random() * 2);
@@ -334,10 +400,11 @@ PanelWindow {
             let r = Math.random() * (wh + ws + wb);
             kind = (r -= wh) < 0 ? "heal" : (r -= ws) < 0 ? "speed" : "bomb";
         }
-        const used = sm.items.map(q => q.slot); let slot = 0; while (used.indexOf(slot) >= 0) slot++;
-        const pick = () => ropeL + 70 + Math.random() * (ropeR - ropeL - 140);
-        let x = pick();
-        for (let k = 0; k < 8 && !sm.f.every(f => Math.abs(f.x - x) > 80); k++) x = pick();
+        var slot = 0, used0 = false, used1 = false, ui = 0, x, tries = 0, us;
+        while (ui < sm.items.length) { us = sm.items[ui++].slot; if (us === 0) used0 = true; else if (us === 1) used1 = true; }
+        slot = !used0 ? 0 : !used1 ? 1 : 2;
+        x = ropeL + 70 + Math.random() * (ropeR - ropeL - 140);
+        while (tries < 8 && (Math.abs(sm.f[0].x - x) <= 80 || Math.abs(sm.f[1].x - x) <= 80)) { x = ropeL + 70 + Math.random() * (ropeR - ropeL - 140); tries++; }
         sm.items.push({ "id": ++sm.itemN, "k": kind, "x": x, "y": 320, "vy": 0, "vx": 0, "st": "fall", "t": 0, "life": 330, "fuse": 0, "slot": slot, "thrown": false, "bounced": false });
         sm.st.pk.drop++;
         g.sfx("drop", 0.7);
@@ -369,8 +436,9 @@ PanelWindow {
             g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp;
             sm.st.pk.heal++;
             g.sfx("heal", 0.9);
-            for (let i = 0; i < 30; i++) sm.parts.push({ "x": f.x + (Math.random() - 0.5) * 56, "y": fy - f.y - 10 - Math.random() * 40, "vx": (Math.random() - 0.5) * 1.5, "vy": -1 - Math.random() * 2.6, "g": -0.015, "life": 26 + Math.random() * 14, "c": rnd(["#3ddc84", "#9bffb8", "#ffffff", "#5de6a0"]), "s": 4 });
-            sm.rings.push({ "x": f.x, "y": fy - 6, "r": 8, "life": 16, "c": "#3ddc84" });
+            var hi = 0;
+            while (hi < 30) { addPart(f.x + (Math.random() - 0.5) * 56, fy - f.y - 10 - Math.random() * 40, (Math.random() - 0.5) * 1.5, -1 - Math.random() * 2.6, -0.015, 26 + Math.random() * 14, healCols[(Math.random() * 4) | 0], 4); hi++; }
+            addRing(f.x, fy - 6, 8, 16, 0, "#3ddc84");
             floatText(f.x, fy - f.y - 140, "+" + H + " HP", "#3ddc84", true);
             comment(rnd(tl([f.who.name + " хватает аптечку!", "Аптечка! Свежие силы!", f.who.name + " подлатался!"], [f.who.name + " grabs the heal kit!", "A heal kit! Fresh strength!", f.who.name + " patches up!"])));
             snapEv("heal", 140);
@@ -378,8 +446,8 @@ PanelWindow {
             f.spd = 210;
             sm.st.pk.speed++;
             g.sfx("boost", 0.9);
-            sparks(f.x, fy - f.y - 50, 16, false, null, ["#ffe066", "#fff2a8", "#6ec3e8"]);
-            sm.rings.push({ "x": f.x, "y": fy - 6, "r": 8, "life": 14, "c": "#ffe066" });
+            sparks(f.x, fy - f.y - 50, 16, false, null, spdCols);
+            addRing(f.x, fy - 6, 8, 14, 0, "#ffe066");
             floatText(f.x, fy - f.y - 140, tl("УСКОРЕНИЕ!", "SPEED UP!"), "#ffe066", true);
             comment(rnd(tl([f.who.name + " ускоряется! Не моргай!", "Ускорение! Это уже не бокс, это Формула-1!"], [f.who.name + " speeds up! Don't blink!", "Speed boost! This isn't boxing anymore, it's Formula 1!"])));
             snapEv("speed", 650);
@@ -401,11 +469,13 @@ PanelWindow {
         sm.st.pk.boom++;
         g.sfx("boom", 1); g.sfx("crack", 0.6);
         sm.flash = Math.max(sm.flash, 5); sm.flashC = "#ffb347"; sm.shake = Math.max(sm.shake, 16); sm.cam = 30; sm.punch = Math.min(0.3, sm.punch + 0.12); sm.px = it.x; sm.py = fy - 40; sm.freeze = Math.max(sm.freeze, 3);
-        sm.rings.push({ "x": it.x, "y": fy - 14, "r": 10, "life": 22, "round": true, "c": "#ffb347" });
-        sm.rings.push({ "x": it.x, "y": fy - 14, "r": 2, "life": 18, "round": true, "c": "#ffffff" });
-        for (let i = 0; i < 46; i++) {
-            const an = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 9;
-            sm.parts.push({ "x": it.x, "y": fy - 14, "vx": Math.cos(an) * sp, "vy": Math.sin(an) * sp - 2, "g": 0.2, "life": 16 + Math.random() * 16, "c": rnd(["#ff8a3d", "#ffd34d", "#ffffff", "#c0392b", "#444444"]), "s": 5 });
+        addRing(it.x, fy - 14, 10, 22, 1, "#ffb347");
+        addRing(it.x, fy - 14, 2, 18, 1, "#ffffff");
+        var bi = 0, an, sp;
+        while (bi < 46) {
+            an = Math.random() * 6.283185; sp = 2 + Math.random() * 9;
+            addPart(it.x, fy - 14, Math.cos(an) * sp, Math.sin(an) * sp - 2, 0.2, 16 + Math.random() * 16, boomCols[(Math.random() * 5) | 0], 5);
+            bi++;
         }
         floatText(it.x, fy - 120, "BOOM!", "#ffb347", true);
         snapEv("boom", 170);
@@ -431,13 +501,18 @@ PanelWindow {
         if (dead.length && sm.phase === "fight") finisher(sm.f[1 - dead[0].side], dead[0]);
         else comment(rnd(tl(["БАБАХ! Зал в восторге!", "Это было громко!"], ["KABOOM! The crowd loves it!", "That was loud!"])));
     }
+    function canGrab(st) {
+        return st === "idle" || st === "dash" || st === "fetch" || st === "block" || st === "atk" || st === "jatk" || st === "flee";
+    }
     function stepItems(dt) {
+        var i = 0, n, w = 0, it, fa, fb, got, f;
         if (g.dbgSpawn) { if (sm.phase === "fight") spawnItem(g.dbgSpawn); g.dbgSpawn = ""; }
-        if (sm.phase !== "fight") { if (sm.items.length) sm.items = []; return; }
+        if (sm.phase !== "fight") { if (sm.items.length) sm.items.length = 0; return; }
         if (g.pickupsOn) { sm.itemT -= dt; if (sm.itemT <= 0) { spawnItem(); sm.itemT = itemGap() * (0.7 + Math.random() * 0.6); } }
-        if (!sm.items.length) return;
-        const keep = [];
-        for (const it of sm.items) {
+        n = sm.items.length;
+        if (!n) return;
+        while (i < n) {
+            it = sm.items[i++];
             it.t += dt;
             if (it.st === "fall" || it.st === "fly") {
                 it.vy -= 1.1 * dt; it.y += it.vy * dt; it.x += it.vx * dt;
@@ -467,17 +542,22 @@ PanelWindow {
                 it.x = Math.max(ropeL + 14, Math.min(ropeR - 14, it.x));
             }
             if (sm.phase === "fight" && (it.st === "ready" || (it.k === "bomb" && it.st === "fuse" && it.fuse > 28 && !it.thrown))) {
-                let got = null;
-                for (const f of (Math.random() < 0.5 ? [sm.f[0], sm.f[1]] : [sm.f[1], sm.f[0]]))
-                    if (Math.abs(f.x - it.x) < 28 && f.y < 40 && (f.st === "idle" || f.st === "dash" || f.st === "fetch" || f.st === "block" || f.st === "atk" || f.st === "jatk" || f.st === "flee")) { got = f; break; }
+                fa = sm.f[0]; fb = sm.f[1];
+                if (Math.random() < 0.5) { fa = sm.f[1]; fb = sm.f[0]; }
+                got = null;
+                if (Math.abs(fa.x - it.x) < 28 && fa.y < 40 && canGrab(fa.st)) got = fa;
+                else if (Math.abs(fb.x - it.x) < 28 && fb.y < 40 && canGrab(fb.st)) got = fb;
                 if (got) { collect(got, sm.f[1 - got.side], it); if (it.k !== "bomb") continue; }
             }
-            keep.push(it);
+            sm.items[w++] = it;
         }
-        sm.items = keep;
-        for (const f of sm.f)
+        sm.items.length = w;
+        i = 0;
+        while (i < 2) {
+            f = sm.f[i++];
             if (f.spd > 0 && Math.abs(f.vx) > 2 && Math.random() < 0.6)
-                sm.parts.push({ "x": f.x - Math.sign(f.vx) * 12, "y": fy - f.y - 8 - Math.random() * 62, "vx": -f.vx * 0.15, "vy": 0, "g": 0, "life": 9, "c": rnd(["#ffe066", "#fff2a8", "#6ec3e8"]), "s": 4 });
+                addPart(f.x - Math.sign(f.vx) * 12, fy - f.y - 8 - Math.random() * 62, -f.vx * 0.15, 0, 0, 9, spdCols[(Math.random() * 3) | 0], 4);
+        }
     }
     function finisher(att, def) {
         const fin = att.wep.fin;
@@ -488,7 +568,7 @@ PanelWindow {
         g.ko = true; g.banner = "K.O.!"; g.finText = fin.t;
         g.sfx("ko", 1); g.sfx("cheer", 0.8); g.sfx("gong", 0.6);
         sm.cam = 60; sm.hype = 1; sm.freeze = 6; sm.punch = 0.3; sm.vig = 1; sm.scan = 10;
-        sm.rings.push({ "x": def.x, "y": fy - def.y - 60, "r": 8, "life": 30, "round": true, "c": "#ffffff" });
+        addRing(def.x, fy - def.y - 60, 8, 30, 1, "#ffffff");
         sm.winner = att; sm.loser = def; sm.byKO = true;
         g.lastHit = att.wep.id + ":finisher";
         switch (fin.fx) {
@@ -513,33 +593,56 @@ PanelWindow {
         if (k === "super") superStart(f, mv);
         if (mv.k === "homerun" && Math.random() < 0.5) comment(f.who.name + tl(" замахивается на хоумран!", " winds up for a home run!"));
     }
+    function atTime(t, n) { return t <= n && t + sm.dt > n; }
+    function meleeHit(f, e, dist, mv) {
+        if (dist < Math.min(f.wep.range, 104) + 12) hit(f, e, mv, false);
+        else floatText(f.x + f.face * 50, fy - 100, tl("мимо!", "miss!"), String(cText), false);
+    }
     function moveTick(f, e, dist) {
-        const mv = f.mv, k = mv.k, t = f.t, wp = f.wep;
-        const melee = () => { if (dist < Math.min(wp.range, 104) + 12) hit(f, e, mv, false); else floatText(f.x + f.face * 50, fy - 100, tl("мимо!", "miss!"), String(cText), false); };
-        const at = n => t <= n && t + sm.dt > n;
+        var mv = f.mv, k = mv.k, t = f.t, wp = f.wep, i, a, y, nh;
         switch (k) {
-        case "swing": case "overhead": case "homerun": case "spacebar": if (at(4)) melee(); break;
-        case "flurry": for (const n of [11, 8, 5, 2].slice(0, mv.nh || 3)) if (at(n)) melee(); break;
-        case "throw": if (at(5)) { f.noWep = true; sm.proj.push({ "k": "throw", "x": f.x + f.face * 10, "y": fy - 80, "vx": f.face * 11, "own": f, "tgt": e, "bmp": wp.bmp, "rot": 0, "back": false, "life": 90, "mv": mv }); } break;
-        case "wave": if (at(5)) sm.proj.push({ "k": "wave", "x": f.x + f.face * 14, "y": fy - 80, "vx": f.face * 11, "own": f, "tgt": e, "life": 50, "size": mv.big ? 1.7 : 1, "mv": mv }); break;
-        case "flop": if (at(5)) sm.proj.push({ "k": "flop", "x": f.x + f.face * 10, "y": fy - 6, "vx": f.face * 6, "own": f, "tgt": e, "life": 80, "bmp": wp.bmp, "mv": mv }); break;
-        case "spray": if (at(6)) for (let i = 0; i < 5; i++) sm.proj.push({ "k": "key", "x": f.x + f.face * 10, "y": fy - 90, "vx": f.face * (6 + Math.random() * 5), "vy": -3 - Math.random() * 4, "own": f, "tgt": e, "ch": rnd(["Q", "W", "E", "R", "A", "S", "D", "Z", "Ё", "Й"]), "life": 70, "mv": { "id": "spray", "dm": 0.35, "kb": 0.3, "w": tl(["клац!", "тык!"], ["clack!", "tap!"]) } }); break;
+        case "swing": case "overhead": case "homerun": case "spacebar": if (atTime(t, 4)) meleeHit(f, e, dist, mv); break;
+        case "flurry":
+            nh = mv.nh || 3;
+            if (nh >= 1 && atTime(t, 11)) meleeHit(f, e, dist, mv);
+            if (nh >= 2 && atTime(t, 8)) meleeHit(f, e, dist, mv);
+            if (nh >= 3 && atTime(t, 5)) meleeHit(f, e, dist, mv);
+            if (nh >= 4 && atTime(t, 2)) meleeHit(f, e, dist, mv);
+            break;
+        case "throw": if (atTime(t, 5)) { f.noWep = true; sm.proj.push({ "k": "throw", "x": f.x + f.face * 10, "y": fy - 80, "vx": f.face * 11, "own": f, "tgt": e, "bmp": wp.bmp, "rot": 0, "back": false, "life": 90, "mv": mv }); } break;
+        case "wave": if (atTime(t, 5)) sm.proj.push({ "k": "wave", "x": f.x + f.face * 14, "y": fy - 80, "vx": f.face * 11, "own": f, "tgt": e, "life": 50, "size": mv.big ? 1.7 : 1, "mv": mv }); break;
+        case "flop": if (atTime(t, 5)) sm.proj.push({ "k": "flop", "x": f.x + f.face * 10, "y": fy - 6, "vx": f.face * 6, "own": f, "tgt": e, "life": 80, "bmp": wp.bmp, "mv": mv }); break;
+        case "spray":
+            if (atTime(t, 6)) {
+                sprayMv.w = tl(sprayWru, sprayWen);
+                i = 0;
+                while (i < 5) { sm.proj.push({ "k": "key", "x": f.x + f.face * 10, "y": fy - 90, "vx": f.face * (6 + Math.random() * 5), "vy": -3 - Math.random() * 4, "own": f, "tgt": e, "ch": keyChars[(Math.random() * keyChars.length) | 0], "life": 70, "mv": sprayMv }); i++; }
+            }
+            break;
         case "beam":
-            if (t > 8) for (let i = 0; i < 2; i++) { const a = Math.random() * 6.3; sm.parts.push({ "x": f.x + f.face * 40 + Math.cos(a) * 40, "y": fy - 80 + Math.sin(a) * 40, "vx": -Math.cos(a) * 3, "vy": -Math.sin(a) * 3, "g": 0, "life": 12, "c": rnd(["#ff4f6d", String(cAccent), "#ffffff"]), "s": 4 }); }
-            if (at(8)) { sm.beams.push({ "x1": f.x + f.face * 50, "x2": e.x, "y": fy - f.y - 80, "life": 8, "w": 14 }); if (dist < 330) hit(f, e, mv, false); }
+            if (t > 8) {
+                colBuf[0] = "#ff4f6d"; colBuf[1] = String(cAccent); colBuf[2] = "#ffffff";
+                i = 0;
+                while (i < 2) { a = Math.random() * 6.3; addPart(f.x + f.face * 40 + Math.cos(a) * 40, fy - 80 + Math.sin(a) * 40, -Math.cos(a) * 3, -Math.sin(a) * 3, 0, 12, colBuf[(Math.random() * 3) | 0], 4); i++; }
+            }
+            if (atTime(t, 8)) { addBeam(f.x + f.face * 50, e.x, fy - f.y - 80, 8, 14); if (dist < 330) hit(f, e, mv, false); }
             break;
         case "eyeblast":
-            if (at(6)) { const y = fy - f.y - 64 - 30; sm.beams.push({ "x1": f.x + f.face * 10, "x2": e.x, "y": y - 6, "life": 7, "w": 6 }); sm.beams.push({ "x1": f.x + f.face * 10, "x2": e.x, "y": y + 6, "life": 7, "w": 6 }); if (dist < 330) hit(f, e, mv, false); }
+            if (atTime(t, 6)) { y = fy - f.y - 64 - 30; addBeam(f.x + f.face * 10, e.x, y - 6, 7, 6); addBeam(f.x + f.face * 10, e.x, y + 6, 7, 6); if (dist < 330) hit(f, e, mv, false); }
             break;
         case "super":
             if (t > 12) {
                 sm.vig = Math.max(sm.vig, 0.7);
-                if (Math.floor(t * 2) % 2 === 0) for (let i = 0; i < 3; i++) { const an = Math.random() * 6.3; sm.parts.push({ "x": f.x + Math.cos(an) * 58, "y": fy - f.y - 60 + Math.sin(an) * 58, "vx": -Math.cos(an) * 3.6, "vy": -Math.sin(an) * 3.6, "g": 0, "life": 15, "c": rnd(["#ffd34d", "#fff2a8", "#ffffff", String(cAccent2)]), "s": 4 }); }
+                if (Math.floor(t * 2) % 2 === 0) {
+                    colBuf[0] = "#ffd34d"; colBuf[1] = "#fff2a8"; colBuf[2] = "#ffffff"; colBuf[3] = String(cAccent2);
+                    i = 0;
+                    while (i < 3) { a = Math.random() * 6.3; addPart(f.x + Math.cos(a) * 58, fy - f.y - 60 + Math.sin(a) * 58, -Math.cos(a) * 3.6, -Math.sin(a) * 3.6, 0, 15, colBuf[(Math.random() * 4) | 0], 4); i++; }
+                }
             }
-            for (let i = 0; i < mv.nh; i++) if (at(12 - i * 3)) superStrike(f, e, i, mv);
+            i = 0; while (i < mv.nh) { if (atTime(t, 12 - i * 3)) superStrike(f, e, i, mv); i++; }
             break;
         case "eat":
-            if (at(8)) { f.hp = Math.min(100, f.hp + 7); g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp; floatText(f.x, fy - 140, tl("+7 *хрум*", "+7 *crunch*"), String(cOk), false); sparks(f.x + f.face * 10, fy - f.y - 80, 10, false, null, ["#e0b060", "#8a5a2b"]); }
+            if (atTime(t, 8)) { f.hp = Math.min(100, f.hp + 7); g.hpA = sm.f[0].hp; g.hpB = sm.f[1].hp; floatText(f.x, fy - 140, tl("+7 *хрум*", "+7 *crunch*"), String(cOk), false); sparks(f.x + f.face * 10, fy - f.y - 80, 10, false, null, ["#e0b060", "#8a5a2b"]); }
             break;
         }
     }
@@ -594,37 +697,54 @@ PanelWindow {
         }
     }
     function edgeOf(x, pad) { return x < ropeL + pad || x > ropeR - pad; }
-    function ambX(i) {
-        const sp = arenaId === "desert" ? (gustVis > 0 ? gustDir * 7 : 0.3) : 0.4;
-        let v = (i * 83 + ambFr * sp) % 980;
-        if (v < 0) v += 980;
-        return Math.round(v - 40);
+    // write flake positions here. Bindings that called ambX/ambY cloned a block context 24 times a frame and tripped the V4 GC.
+    function placeFlakes(fr) {
+        var i = 0, it, sp, v, kind = arenaId, gy;
+        if (kind !== "dojo" && kind !== "desert" && kind !== "fjord" && kind !== "terem") return;
+        sp = kind === "desert" ? (gustVis > 0 ? gustDir * 7 : 0.3) : 0.4;
+        gy = kind === "desert" && gustVis > 0 ? 1.3 : 0.45;
+        while (i < 12) {
+            it = flakeRep.itemAt(i);
+            if (it) {
+                v = (i * 83 + fr * sp) % 980; if (v < 0) v += 980; it.x = Math.round(v - 40);
+                v = (i * 53 + fr * gy) % 340; if (v < 0) v += 340;
+                it.y = Math.round(60 + v + Math.sin(fr / 14 + i) * 6);
+            }
+            i++;
+        }
     }
-    function ambY(i) {
-        const sp = arenaId === "desert" && gustVis > 0 ? 1.3 : 0.45;
-        let v = (i * 53 + ambFr * sp) % 340;
-        if (v < 0) v += 340;
-        return Math.round(60 + v + Math.sin(ambFr / 14 + i) * 6);
+    function placeSmoke(fr) {
+        var i = 0, it, sp;
+        while (i < 9) {
+            it = smokeRep.itemAt(i);
+            if (it) {
+                sp = 0.6 + (i % 3) * 0.3;
+                it.x = Math.round(((i * 113 + fr * sp) % 1100) - 100);
+                it.y = Math.round(fy - 22 + Math.sin(fr / 9 + i) * 4);
+            }
+            i++;
+        }
     }
     // pre: scale the step the brain just chose. post: add a force after friction so it can build up
     function arenaForce(f, dt, post) {
+        var sup, k;
         if (!g.arenaFx || !sm || sm.phase !== "fight" || f.st === "ko" || f.st === "enter") return;
-        const sup = f.st === "atk" && f.mv && f.mv.k === "super";
+        sup = f.st === "atk" && f.mv && f.mv.k === "super";
         if (!post && arenaId === "dojo" && f.y < 8 && f.st !== "block" && edgeOf(f.x, 48)) {
-            const k = f.spd > 0 ? 1.6 : sup ? 1.25 : 1;
+            k = f.spd > 0 ? 1.6 : sup ? 1.25 : 1;
             f.vx += (f.x < ropeL + 48 ? -0.22 : 0.22) * k * dt;
             sm.st.ar.slip++;
         } else if (!post && arenaId === "terem" && f.y < 10 && edgeOf(f.x, 58)) {
-            const k = sup ? 1 : f.spd > 0 ? 0.86 : f.st === "block" ? 0.48 : (f.st === "dash" || f.st === "fetch" || f.st === "flee" || f.st === "walk") ? 0.58 : 0.7;
+            k = sup ? 1 : f.spd > 0 ? 0.86 : f.st === "block" ? 0.48 : (f.st === "dash" || f.st === "fetch" || f.st === "flee" || f.st === "walk") ? 0.58 : 0.7;
             f.vx *= k;
             sm.st.ar.snow++;
         }
         if (post && arenaId === "desert" && sm.gustT > 0) {
-            const k = f.st === "block" ? 0.22 : sup ? 0.34 : f.spd > 0 ? 0.5 : 1.05;
+            k = f.st === "block" ? 0.22 : sup ? 0.34 : f.spd > 0 ? 0.5 : 1.05;
             f.vx += sm.gustD * k * dt;
             sm.st.ar.gust++;
         } else if (post && arenaId === "plaza" && Math.abs(f.x - 450) < 78 && f.y < 28) {
-            const k = f.st === "block" ? 0.35 : f.spd > 0 ? 1.4 : 1;
+            k = f.st === "block" ? 0.35 : f.spd > 0 ? 1.4 : 1;
             if (g.superOn) addSp(f, 0.14 * k * dt);
             else if (f.st === "dash" || f.st === "fetch" || f.st === "flee") f.vx *= 1 + 0.12 * k;
             sm.st.ar.party++;
@@ -638,13 +758,13 @@ PanelWindow {
             if (sm.sandAcc >= 3) {
                 sm.sandAcc = 0;
                 if (sm.parts.length < 40)
-                    sm.parts.push({ "x": sm.gustD > 0 ? 130 + Math.random() * 120 : 650 + Math.random() * 120, "y": fy - 20 - Math.random() * 120, "vx": sm.gustD * (4 + Math.random() * 5), "vy": (Math.random() - 0.5) * 0.6, "g": 0.04, "life": 16 + Math.random() * 8, "c": rnd(["#e0b060", "#f0d090", "#c4922a", "#fff2c8"]), "s": 3 });
+                    addPart(sm.gustD > 0 ? 130 + Math.random() * 120 : 650 + Math.random() * 120, fy - 20 - Math.random() * 120, sm.gustD * (4 + Math.random() * 5), (Math.random() - 0.5) * 0.6, 0.04, 16 + Math.random() * 8, sandCols[(Math.random() * 4) | 0], 3);
             }
         } else {
             sm.gustCd -= dt;
             if (sm.gustCd <= 24 && !sm.warned) {
                 sm.warned = true;
-                const next = -sm.gustD;
+                var next = -sm.gustD;
                 comment(next > 0 ? tl("Песок сейчас пойдёт слева направо!", "Sand is about to blow left to right!") : tl("Песок сейчас пойдёт справа налево!", "Sand is about to blow right to left!"), false);
             }
             if (sm.gustCd <= 0) { sm.gustD = -sm.gustD; sm.gustT = 38; sm.gustCd = 120 + Math.random() * 40; sm.warned = false; }
@@ -748,7 +868,7 @@ PanelWindow {
             f.y += f.vy * dt;
             if (f.y <= 0) { if (f.vy < -7) { dust(f.x, 8); f.squash = 6; } f.y = 0; f.vy = 0; }
         }
-        let fr = 0.8;
+        var fr = 0.8;
         if (g.arenaFx && f.y === 0) {
             if (arenaId === "fjord") fr = f.spd > 0 ? 0.97 : 0.93;
             else if (arenaId === "dojo" && edgeOf(f.x, 48)) fr = f.spd > 0 ? 0.95 : 0.9;
@@ -766,8 +886,8 @@ PanelWindow {
         if (f.spd > 0) f.spd -= dt;
         if (f.blkCd > 0) f.blkCd -= dt;
         if (f.st !== "block" && f.gd < 100) f.gd = Math.min(100, f.gd + 0.8 * dt);
-        if (f.st === "dash" || Math.abs(f.vx) > 8 || (f.spd > 0 && Math.abs(f.vx) > 2)) { f.trail.unshift({ "x": f.x, "y": f.y }); if (f.trail.length > (f.spd > 0 ? 6 : 4)) f.trail.pop(); }
-        else if (f.trail.length) f.trail.pop();
+        if (f.st === "dash" || Math.abs(f.vx) > 8 || (f.spd > 0 && Math.abs(f.vx) > 2)) pushTrail(f, f.x, f.y);
+        else popTrail(f);
     }
     function brain(f, e, dt) {
         const dx = e.x - f.x, dist = Math.abs(dx);
@@ -800,20 +920,28 @@ PanelWindow {
             if (f.cd <= 0 && sm.items.length) { const it = pickTarget(f, e); if (it) { f.st = "fetch"; f.tgt = it; f.fetchT = 0; break; } }
             const mr = Math.min(wp.range, 104);                     // melee reach (mic/laser too: bonk / butt bash)
             if (f.cd > 0) { if (dist > mr + 40 && Math.random() < 0.04 * dt) f.st = "dash"; break; }
-            const stall = sm.frame - (sm.lastDmg || 0) > 90;
-            const ok = m => !(m.k === "eat" && f.hp > 85) && !(m.k === "throw" && f.noWep);
-            let mel = wp.moves.filter(m => !m.r && ok(m) && (m.k === "eat" || dist <= mr - 8));
-            const rng = wp.moves.filter(m => m.r && ok(m) && dist <= m.r - 8);
+            var stall = sm.frame - (sm.lastDmg || 0) > 90;
+            var mi = 0, mn = wp.moves.length, mv0, melN = 0, rngN = 0, cand, candN, pick, ci, cw;
+            while (mi < mn) {
+                mv0 = wp.moves[mi++];
+                if ((mv0.k === "eat" && f.hp > 85) || (mv0.k === "throw" && f.noWep)) continue;
+                if (!mv0.r && (mv0.k === "eat" || dist <= mr - 8)) melBuf[melN++] = mv0;
+                else if (mv0.r && dist <= mv0.r - 8) rngBuf[rngN++] = mv0;
+            }
+            melBuf.length = melN; rngBuf.length = rngN;
             // ranged: never twice in a row, >= 2.5 s apart, mostly at long distance
-            const rOk = rng.length && !f.lastRanged && sm.frame - (f.rT || -999) >= 75 && !stall;
-            const rWant = dist > 170 ? 0.7 : dist > mr ? 0.45 : 0.28;
-            let cand;
-            if (rOk && Math.random() < rWant) cand = rng;
-            else if (mel.length) cand = mel;
+            var rOk = rngN && !f.lastRanged && sm.frame - (f.rT || -999) >= 75 && !stall;
+            var rWant = dist > 170 ? 0.7 : dist > mr ? 0.45 : 0.28;
+            if (rOk && Math.random() < rWant) { cand = rngBuf; candN = rngN; }
+            else if (melN) { cand = melBuf; candN = melN; }
             else { f.st = "dash"; f.forced = stall; break; }
-            if (f.rep >= 2 && cand.length > 1) cand = cand.filter(m => m.id !== f.lastMv);
-            if (cand === mel && Math.random() < 0.14 && dist < mr && f.hp > 0) { f.st = "jatk"; f.atkN++; f.vy = 13; f.vx = f.face * Math.min(7, dist / 8 + 2); f.hitDone = false; f.mv = { "id": "jump", "n": tl("прыжок", "jump") }; f.lastRanged = false; sm.mvStat.m++; break; }
-            const pick = rnd(cand);
+            if (f.rep >= 2 && candN > 1) {
+                ci = 0; cw = 0;
+                while (ci < candN) { mv0 = cand[ci++]; if (mv0.id !== f.lastMv) cand[cw++] = mv0; }
+                if (cw) { cand.length = cw; candN = cw; }
+            }
+            if (cand === melBuf && Math.random() < 0.14 && dist < mr && f.hp > 0) { f.st = "jatk"; f.atkN++; f.vy = 13; f.vx = f.face * Math.min(7, dist / 8 + 2); f.hitDone = false; f.mv = { "id": "jump", "n": tl("прыжок", "jump") }; f.lastRanged = false; sm.mvStat.m++; break; }
+            pick = cand[(Math.random() * candN) | 0];
             f.rep = pick.id === f.lastMv ? (f.rep || 0) + 1 : 1; f.lastMv = pick.id;
             if (pick.r) { f.lastRanged = true; f.rT = sm.frame; sm.mvStat.r++; } else { f.lastRanged = false; if (pick.k !== "eat") sm.mvStat.m++; }
             g.moveStat = sm.mvStat.m + "/" + sm.mvStat.r;
@@ -883,8 +1011,10 @@ PanelWindow {
         g.scoreTxt = sm.scores[0] + " : " + sm.scores[1];
         g.sfx("gong", 0.7);
         sm.dmg = [0, 0];
-        for (const q of sm.proj) if (q.own) q.own.noWep = false;
-        sm.proj = []; sm.beams = [];
+        var qi = 0;
+        while (qi < sm.proj.length) { if (sm.proj[qi].own) sm.proj[qi].own.noWep = false; qi++; }
+        sm.proj.length = 0;
+        qi = sm.beams.length; while (qi--) recycle(sm.beams[qi]); sm.beams.length = 0;
         const who = s0 > s1 ? sm.f[0].who.name : s1 > s0 ? sm.f[1].who.name : "";
         comment(tl("Гонг! Конец раунда " + sm.round + ". Судьи: " + s0 + "–" + s1 + (who ? " в пользу " + who : ", поровну") + "!", "Gong! End of round " + sm.round + ". Judges: " + s0 + "–" + s1 + (who ? " for " + who : ", even") + "!"), true);
         const last = g.rounds > 0 ? sm.round >= g.rounds : sm.round >= 8;
@@ -906,7 +1036,7 @@ PanelWindow {
                     if (f.y <= 0 && f.vy < 0) { f.y = 0; f.vy = 0; f.vx = 0; f.st = "idle"; f.squash = 6; dust(f.x, 10); sm.hype = 0.8; }
                 }
             if (sm.phT > 10 && sm.phT - dt <= 10) comment(arenaBlurb(), true);
-            if (sm.phT > 52 && g.banner === arenaTitle()) g.banner = "";
+            if (sm.phT > 52 && g.banner === sm.title) g.banner = "";
             if (sm.phT > 4 && sm.phT - dt <= 4 && g.tourStage) comment(tl("Турнир! " + g.tourStage + "! Матч " + g.tourMatchNo + ".", "Tournament! " + g.tourStage + "! Match " + g.tourMatchNo + "."), true);
             if (sm.phT > 40 && sm.phT - dt <= 40) comment(tl("В синем углу — " + A.who.name + " с оружием «" + A.wep.name + "»!", "In the blue corner — " + A.who.name + " with the " + A.wep.name + "!"), true);
             if (sm.phT > 100 && sm.phT - dt <= 100) comment(tl("В красном — " + B.who.name + " с оружием «" + B.wep.name + "»! " + (g.rounds ? g.rounds + " раунд" + (g.rounds === 1 ? "" : g.rounds < 5 ? "а" : "ов") : "До нокаута") + "!", "In the red corner — " + B.who.name + " with the " + B.wep.name + "! " + (g.rounds ? g.rounds + " round" + (g.rounds === 1 ? "" : "s") : "To the knockout") + "!"), true);
@@ -924,10 +1054,11 @@ PanelWindow {
             sm.roundT -= dt;
             sm.fightT += dt; sm.maxStall = Math.max(sm.maxStall, sm.frame - (sm.lastDmg || 0));
             brain(A, B, dt * (A.spd > 0 ? 1.35 : 1)); brain(B, A, dt * (B.spd > 0 ? 1.35 : 1));
-            for (const f of sm.f) { f.mvT = (f.st === "dash" || f.st === "fetch") ? f.mvT + dt : 0; if (f.mvT > sm.st.maxMv) sm.st.maxMv = f.mvT; }
-            for (const f of sm.f) physics(f, dt);
-            const d = B.x - A.x;
-            if (sm.phase === "fight" && Math.abs(d) < 40 && A.y < 30 && B.y < 30) { const push = (40 - Math.abs(d)) / 2 * (d >= 0 ? 1 : -1); A.x -= push; B.x += push; }
+            A.mvT = (A.st === "dash" || A.st === "fetch") ? A.mvT + dt : 0; if (A.mvT > sm.st.maxMv) sm.st.maxMv = A.mvT;
+            B.mvT = (B.st === "dash" || B.st === "fetch") ? B.mvT + dt : 0; if (B.mvT > sm.st.maxMv) sm.st.maxMv = B.mvT;
+            physics(A, dt); physics(B, dt);
+            var sep = B.x - A.x;
+            if (sm.phase === "fight" && Math.abs(sep) < 40 && A.y < 30 && B.y < 30) { var push = (40 - Math.abs(sep)) / 2 * (sep >= 0 ? 1 : -1); A.x -= push; B.x += push; }
             if (sm.phase === "fight" && sm.roundT <= 0) endRound();
         } else if (sm.phase === "break") {
             const corners = [ropeL + 12, ropeR - 12];
@@ -936,17 +1067,18 @@ PanelWindow {
                 else if (!f.sit) { if (f.y === 0 && walkTo(f, corners[f.side], dt)) { f.sit = true; f.st = "sit"; f.face = f.side === 0 ? 1 : -1; } }
                 physics(f, dt);
             }
-            const tr = [pl - 22, pr + 22];
-            sm.trX = sm.trX.map((x, i) => x + (tr[i] - x) * 0.1);
+            sm.trX[0] += ((pl - 22) - sm.trX[0]) * 0.1;
+            sm.trX[1] += ((pr + 22) - sm.trX[1]) * 0.1;
             if (sm.rec && sm.phT > 40 && sm.phT < 130) {
-                const k = (sm.phT - 40) / 90;
-                sm.f.forEach((f, i) => f.hp = sm.rec[i].from + (sm.rec[i].to - sm.rec[i].from) * k);
+                var rk = (sm.phT - 40) / 90;
+                A.hp = sm.rec[0].from + (sm.rec[0].to - sm.rec[0].from) * rk;
+                B.hp = sm.rec[1].from + (sm.rec[1].to - sm.rec[1].from) * rk;
                 g.hpA = A.hp; g.hpB = B.hp;
             }
-            const adv = tl(["Работай джебом!", "Он открыт слева!", "Дыши, брат, дыши!", "Ты лучший в этом войсе!", "Не забывай про блок!", "Мама смотрит стрим!", "Бей, пока он в AFK!", "Меньше кринжа, больше урона!"], ["Work the jab!", "He's open on the left!", "Breathe, bro, breathe!", "You're the best in this voice chat!", "Don't forget to block!", "Mom's watching the stream!", "Hit them while they're AFK!", "Less cringe, more damage!"]);
+            var adv = tl(advRu, advEn);
             if (sm.phT > 30 && sm.phT - dt <= 30) { g.sayL = rnd(adv.concat([tl("Маши " + A.wep.ins + " смелее!", "Swing harder " + A.wep.ins + "!")])); for (const f of sm.f) splash(f.x + (f.side === 0 ? -6 : 6), fy - 110); }
             if (sm.phT > 95 && sm.phT - dt <= 95) g.sayR = rnd(adv.concat([tl("Маши " + B.wep.ins + " смелее!", "Swing harder " + B.wep.ins + "!")]));
-            if (sm.phT > (g.rounds === 0 ? 175 : 195)) { sm.trX = [112, 788]; startCard(sm.round + 1); }
+            if (sm.phT > (g.rounds === 0 ? 175 : 195)) { sm.trX[0] = 112; sm.trX[1] = 788; startCard(sm.round + 1); }
         } else if (sm.phase === "decision") {
             for (const f of sm.f) physics(f, dt);
             if (sm.phT > 70 && !sm.winner) {
@@ -974,7 +1106,11 @@ PanelWindow {
                 if (t >= 1) { P.st = 2; P.t2 = 0; w.y = ph; w.st = "win"; w.squash = 5; w.face = l.x > 450 ? 1 : -1; dust(450, 12); confetti(); sm.cam = 60; sm.hype = 1; sm.punch = 0.12; g.sfx("fanfare", 0.8); g.sfx("cheer", 0.7); comment(g.tourFinal ? w.who.name + tl(" — ЧЕМПИОН ТУРНИРА! На пьедестал!", " — TOURNAMENT CHAMPION! To the podium!") : w.who.name + tl(" на пьедестале! Пояс чемпиона войса!", " takes the podium! Voice chat champion belt!"), true); }
             } else {
                 P.t2 += dt; w.y = ph; w.vx = 0; w.st = "win";
-                if (Math.floor(P.t2 / 30) !== Math.floor((P.t2 - dt) / 30)) { sm.cam = 20; for (let i = 0; i < 26; i++) sm.parts.push({ "x": 450 + (Math.random() - 0.5) * 60, "y": fy - ph - 120, "vx": (Math.random() - 0.5) * 7, "vy": -3 - Math.random() * 4, "g": 0.18, "life": 70, "c": rnd(["#ffd34d", String(cAccent), String(cAccent2), "#ffffff"]), "s": 4 }); }
+                if (Math.floor(P.t2 / 30) !== Math.floor((P.t2 - dt) / 30)) {
+                    sm.cam = 20; var pi = 0;
+                    colBuf[0] = "#ffd34d"; colBuf[1] = String(cAccent); colBuf[2] = String(cAccent2); colBuf[3] = "#ffffff";
+                    while (pi < 26) { addPart(450 + (Math.random() - 0.5) * 60, fy - ph - 120, (Math.random() - 0.5) * 7, -3 - Math.random() * 4, 0.18, 70, colBuf[(Math.random() * 4) | 0], 4); pi++; }
+                }
             }
             if (!l.sit) {
                 if (l.st === "ko" && sm.phT > 45) { l.st = "idle"; l.squash = 3; }
@@ -1000,56 +1136,90 @@ PanelWindow {
     }
 
     function step(dt) {
+        var i, n, w, q, p, t, bm, r, q0, q1, sec, tg, ox, d, crossed, near, yOk, A0, B0, H0, tz, tx, ty, d0, hw, hh, drop;
+        if (!sm || !g.on) return;
         sm.dt = dt;
         sm.frame += dt;
-        if (g.dbgCharge) { g.dbgCharge = false; for (const f of sm.f) f.sp = 100; }
+        if (g.dbgCharge) { g.dbgCharge = false; sm.f[0].sp = 100; sm.f[1].sp = 100; }
         stepGust(dt);
         stepRoundFlow(dt);
         stepItems(dt);
+        if (!sm || !g.on) return;
         g.phase = sm.phase;
-        { const q0 = sm.f[0], q1 = sm.f[1]; g.spA = Math.round(q0.sp); g.spB = Math.round(q1.sp); g.gdA = Math.max(0, Math.min(100, Math.round(q0.gd))); g.gdB = Math.max(0, Math.min(100, Math.round(q1.gd))); g.sdA = q0.blkCd <= 0 && q0.gd >= 30; g.sdB = q1.blkCd <= 0 && q1.gd >= 30; }
-        const sec = Math.max(0, Math.ceil(sm.roundT / 30));
+        q0 = sm.f[0]; q1 = sm.f[1];
+        g.spA = Math.round(q0.sp); g.spB = Math.round(q1.sp);
+        g.gdA = Math.max(0, Math.min(100, Math.round(q0.gd))); g.gdB = Math.max(0, Math.min(100, Math.round(q1.gd)));
+        g.sdA = q0.blkCd <= 0 && q0.gd >= 30; g.sdB = q1.blkCd <= 0 && q1.gd >= 30;
+        sec = Math.max(0, Math.ceil(sm.roundT / 30));
         g.timerTxt = sm.phase === "fight" ? "0:" + (sec < 10 ? "0" : "") + sec : "";
-        sm.proj = sm.proj.filter(q => {
-            const tg = q.tgt;
+        w = 0; i = 0; n = sm.proj.length;
+        while (i < n) {
+            q = sm.proj[i++];
+            tg = q.tgt;
             if (q.k === "mic") {
                 q.vy += 0.9 * dt; q.y += q.vy * dt;
-                if (q.y >= fy - 10) { sm.rings.push({ "x": q.x, "y": fy - 4, "r": 4, "life": 24 }); sm.shake = 14; dust(q.x, 14); floatText(q.x, fy - 140, tl("*БУМ*", "*BOOM*"), "#ffffff", true); return false; }
-                return true;
+                if (q.y >= fy - 10) { addRing(q.x, fy - 4, 4, 24, 0, "#ffffff"); sm.shake = 14; dust(q.x, 14); floatText(q.x, fy - 140, tl("*БУМ*", "*BOOM*"), "#ffffff", true); continue; }
+                sm.proj[w++] = q; continue;
             }
             q.life -= dt;
             if (q.k === "key") { q.vy += 0.25 * dt; q.y += q.vy * dt; }
             if (q.k === "throw") {
                 q.rot += 0.5 * dt;
-                if (q.back) { const d = q.own.x - q.x; q.x += Math.sign(d) * 12 * dt; if (Math.abs(d) < 20 || q.life <= -60) { q.own.noWep = false; return false; } return true; }
+                if (q.back) {
+                    d = q.own.x - q.x; q.x += Math.sign(d) * 12 * dt;
+                    if (Math.abs(d) < 20 || q.life <= -60) { q.own.noWep = false; continue; }
+                    sm.proj[w++] = q; continue;
+                }
             }
-            const ox = q.x;
+            ox = q.x;
             q.x += q.vx * dt;
-            const crossed = (ox - tg.x) * (q.x - tg.x) <= 0;
-            const near = crossed || Math.abs(q.x - tg.x) < (q.k === "wave" ? 26 * q.size : 28);
-            const yOk = q.k === "flop" ? tg.y < 30 : q.k === "key" ? (q.y > fy - tg.y - 115 && q.y < fy - tg.y + 6) : tg.y < 80;
+            crossed = (ox - tg.x) * (q.x - tg.x) <= 0;
+            near = crossed || Math.abs(q.x - tg.x) < (q.k === "wave" ? 26 * q.size : 28);
+            yOk = q.k === "flop" ? tg.y < 30 : q.k === "key" ? (q.y > fy - tg.y - 115 && q.y < fy - tg.y + 6) : tg.y < 80;
             if (near && yOk) {
                 hit(q.own, tg, q.k === "flop" ? Object.assign({ "stun": 1 }, q.mv) : q.mv, false);
-                if (q.k === "throw") { q.back = true; return true; }
-                return false;
+                if (q.k === "throw") { q.back = true; sm.proj[w++] = q; continue; }
+                continue;
             }
-            if (q.k === "throw" && (q.life <= 0 || q.x < 40 || q.x > ww - 40)) { q.back = true; return true; }
-            if (q.k === "key" && q.y > fy) return false;
-            return q.life > 0 && q.x > 40 && q.x < ww - 40;
-        });
-        sm.beams = sm.beams.filter(bm => { bm.life -= dt; return bm.life > 0; });
-        sm.rings = sm.rings.filter(r => { r.r += 9 * dt; r.life -= dt; return r.life > 0; });
-        const ps = [];
-        for (const p of sm.parts) {
+            if (q.k === "throw" && (q.life <= 0 || q.x < 40 || q.x > ww - 40)) { q.back = true; sm.proj[w++] = q; continue; }
+            if (q.k === "key" && q.y > fy) continue;
+            if (q.life > 0 && q.x > 40 && q.x < ww - 40) sm.proj[w++] = q;
+        }
+        sm.proj.length = w;
+        w = 0; i = 0; n = sm.beams.length;
+        while (i < n) { bm = sm.beams[i++]; bm.life -= dt; if (bm.life > 0) sm.beams[w++] = bm; else recycle(bm); }
+        sm.beams.length = w;
+        w = 0; i = 0; n = sm.rings.length;
+        while (i < n) { r = sm.rings[i++]; r.r += 9 * dt; r.life -= dt; if (r.life > 0) sm.rings[w++] = r; else recycle(r); }
+        sm.rings.length = w;
+        w = 0; i = 0; n = sm.parts.length;
+        while (i < n) {
+            p = sm.parts[i++];
             p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
             if (p.wob !== undefined) p.x += Math.sin((sm.frame + p.wob * 10) / 6) * 0.8;
             if (p.bmp) p.rot += 0.2 * dt;
-            if (p.life > 0 && p.y < 580) ps.push(p);
+            if (p.life > 0 && p.y < 580) sm.parts[w++] = p;
+            else recycle(p);
         }
-        if (ps.length > 220) ps.splice(0, ps.length - 220);
-        sm.parts = ps;
-        sm.floats = sm.floats.filter(t => { t.x += t.vx * dt; t.y += t.vy * dt; if (t.vy > -1.1) t.vy -= 0.15 * dt; t.life -= dt; return t.life > 0; });
-        sm.ropeW = sm.ropeW.map(w => w * Math.pow(0.86, dt));
+        if (w > 160) {
+            drop = w - 160; i = 0;
+            while (i < drop) recycle(sm.parts[i++]);
+            i = 0; while (drop < w) sm.parts[i++] = sm.parts[drop++];
+            w = i;
+        }
+        sm.parts.length = w;
+        w = 0; i = 0; n = sm.floats.length;
+        while (i < n) {
+            t = sm.floats[i++];
+            t.x += t.vx * dt; t.y += t.vy * dt;
+            if (t.vy > -1.1) t.vy -= 0.15 * dt;
+            t.life -= dt;
+            if (t.life > 0) sm.floats[w++] = t;
+            else recycle(t);
+        }
+        sm.floats.length = w;
+        sm.ropeW[0] *= Math.pow(0.86, dt);
+        sm.ropeW[1] *= Math.pow(0.86, dt);
         sm.hype = Math.max(0, sm.hype - 0.01 * dt);
         if (sm.shake > 0) sm.shake -= dt;
         if (sm.flash > 0) sm.flash -= dt;
@@ -1059,15 +1229,15 @@ PanelWindow {
         if (sm.maxBeam > 0) sm.maxBeam -= dt;
         if (sm.sayCd > 0) sm.sayCd -= dt;
         if (g.sayT > 0) g.sayT -= dt;
-        for (const f of sm.f) if (f.fade) f.alpha = Math.max(0.25, f.alpha - 0.02 * dt);
-        const zt = sm.phase === "ko" ? 1.5 : 1;
+        if (q0.fade) q0.alpha = Math.max(0.25, q0.alpha - 0.02 * dt);
+        if (q1.fade) q1.alpha = Math.max(0.25, q1.alpha - 0.02 * dt);
         // virtual camera: follow the fighters' midpoint, zoom in when they are close, punch toward
         // impacts, dramatic zoom on the KO; clamped so the view never leaves the hall
-        const A0 = sm.f[0], B0 = sm.f[1], H0 = 560;
-        let tz = 1, tx = ww / 2, ty = H0 / 2;
+        A0 = q0; B0 = q1; H0 = 560;
+        tz = 1; tx = ww / 2; ty = H0 / 2;
         if (sm.phase === "fight") {
-            const d = Math.abs(A0.x - B0.x);
-            tz = Math.max(1, Math.min(1.22, 1.32 - d / 650));
+            d0 = Math.abs(A0.x - B0.x);
+            tz = Math.max(1, Math.min(1.22, 1.32 - d0 / 650));
             tx = (A0.x + B0.x) / 2;
             ty = H0 / 2 + (fy - 120 - H0 / 2) * ((tz - 1) / 0.3);
         } else if (sm.phase === "win" && sm.pod) {
@@ -1081,7 +1251,7 @@ PanelWindow {
         sm.camZ += (tz - sm.camZ) * 0.2;
         sm.camX += (tx - sm.camX) * 0.15;
         sm.camY += (ty - sm.camY) * 0.15;
-        const hw = ww / (2 * sm.camZ), hh = H0 / (2 * sm.camZ);
+        hw = ww / (2 * sm.camZ); hh = H0 / (2 * sm.camZ);
         sm.camX = Math.max(hw, Math.min(ww - hw, sm.camX));
         sm.camY = Math.max(hh, Math.min(H0 - hh, sm.camY));
         if (sm.vig > 0) sm.vig -= 0.06 * dt;
@@ -1104,21 +1274,22 @@ PanelWindow {
     // perf: frame time and paint time stats over the fight
     property var perf: ({ "n": 0, "sum": 0, "max": 0, "slow": 0, "pn": 0, "psum": 0, "pmax": 0, "t0": 0 })
     function perfTick(ft) {
-        const P = perf;
+        var P = perf, dtm;
         P.n++; P.sum += ft; if (ft > P.max) P.max = ft; if (ft > 0.034) P.slow++;
         if (!P.t0) P.t0 = Date.now();
-        if (Date.now() - P.t0 > 1000) {
-            g.perf = "fps " + (P.n / ((Date.now() - P.t0) / 1000)).toFixed(0) + ", frame avg " + (P.sum / P.n * 1000).toFixed(1) + " ms / max " + (P.max * 1000).toFixed(0)
+        dtm = Date.now() - P.t0;
+        if (dtm > 1000) {
+            g.perf = "fps " + (P.n / (dtm / 1000)).toFixed(0) + ", frame avg " + (P.sum / P.n * 1000).toFixed(1) + " ms / max " + (P.max * 1000).toFixed(0)
                 + " ms, >34ms: " + P.slow + ", paint avg " + (P.pn ? (P.psum / P.pn).toFixed(1) : "-") + " / max " + P.pmax + " ms, parts " + (sm ? sm.parts.length : 0);
             if (sm && sm.phase === "fight") console.info("crew-fight perf: " + g.perf + " arena " + arenaId + (g.arenaFx ? " fx" : " visual"));
-            perf = { "n": 0, "sum": 0, "max": 0, "slow": 0, "pn": 0, "psum": 0, "pmax": 0, "t0": Date.now() };
+            P.n = 0; P.sum = 0; P.max = 0; P.slow = 0; P.pn = 0; P.psum = 0; P.pmax = 0; P.t0 = Date.now();
         }
     }
     // repaint only the layers whose content changes; everything is positioned on the GPU
-    function upd(cv, act) { if (act || cv.was) cv.requestPaint(); cv.was = act; }
+    function upd(cv, act) { if (!cv) return; if (act || cv.was) cv.requestPaint(); cv.was = act; }
     // everything the fighter sprite depends on (its position is a GPU translate, not a repaint)
     function fKey(f, fr) {
-        const st = f.st, mv = st === "atk" || st === "jatk" || st === "hurt";
+        var st = f.st, mv = st === "atk" || st === "jatk" || st === "hurt";
         return st + "|" + f.face + "|" + Math.round(f.squash > 0 ? f.squash * 2 : 0) + "|" + (f.flash > 0 ? Math.floor(f.flash) % 2 : -1)
             + "|" + (f.fade ? Math.floor(fr / 2) % 2 + ":" + f.alpha : "") + "|" + (mv && f.mv ? f.mv.id + ":" + Math.round(f.t * 2) : "")
             + "|" + (f.noWep ? 1 : 0) + "|" + ((st === "dash" || st === "walk") ? Math.floor(fr / 3) % 2 : "")
@@ -1128,45 +1299,56 @@ PanelWindow {
             + "|" + (g.superOn && f.sp >= 100 ? Math.floor(fr / 5) % 2 : "") + "|" + (f.spd > 0 ? Math.floor(fr / 3) % 2 : "");
     }
     function paintLayers() {
-        const s = sm, fr = s.frame;
+        var s = sm, fr, i, j, n, f, cv, k, it, bob, fl, key, wob, br, tk, glow, pod, talk, gv, gd;
+        if (!s || !s.f || !g.on) return;
+        fr = s.frame;
         crowdFx.fr = fr; crowdFx.hype = s.hype;
         if (!shaderOk) { crowdAcc += 1; if (crowdAcc >= (g.eco ? 2 : 3)) { crowdAcc = 0; crowdCv.requestPaint(); } }
         if (Math.abs(g.crowdLvl - s.hype) > 0.08) g.crowdLvl = s.hype; crowdFx.cam = s.cam > 0 ? 1 : 0;
-        smokeLayer.fr = fr; smokeLayer.boost = s.phase === "intro" || s.phase === "ko";
-        for (let i = 0; i < 2; i++) {
-            const f = s.f[i], cv = i === 0 ? fCv0 : fCv1;
+        smokeLayer.boost = s.phase === "intro" || s.phase === "ko";
+        placeSmoke(fr);
+        i = 0;
+        while (i < 2) {
+            f = s.f[i]; cv = i === 0 ? fCv0 : fCv1; i++;
+            if (!cv) continue;
             cv.x = Math.round(f.x) - 160; cv.y = Math.round(fy - f.y) - 250;
-            const k = fKey(f, fr);
+            k = fKey(f, fr);
             if (k !== cv.key) { cv.key = k; cv.requestPaint(); }
         }
-        for (let i = 0; i < 3; i++) {
-            const it = s.items.find(q => q.slot === i), cv = itemRep.itemAt(i);
-            if (!cv) continue;
-            if (!it) { cv.visible = false; continue; }
-            const bob = it.st === "ready" && it.k !== "bomb" ? 3 + Math.sin(fr / 6) * 3 : 0;
+        i = 0;
+        while (i < 3) {
+            cv = itemRep.itemAt(i);
+            if (!cv) { i++; continue; }
+            it = null; j = 0; n = s.items.length;
+            while (j < n) { if (s.items[j].slot === i) { it = s.items[j]; break; } j++; }
+            if (!it) { cv.visible = false; i++; continue; }
+            bob = it.st === "ready" && it.k !== "bomb" ? 3 + Math.sin(fr / 6) * 3 : 0;
             cv.x = Math.round(it.x) - 130; cv.y = Math.round(fy - it.y - bob) - 84;
-            const fl = it.st === "ready" && it.life < 90 ? Math.floor(fr / 3) % 2 : 0;
+            fl = it.st === "ready" && it.life < 90 ? Math.floor(fr / 3) % 2 : 0;
             cv.visible = !fl;
-            const key = it.k + "|" + it.st + "|" + (it.st === "fuse" ? Math.floor(it.fuse / (it.fuse > 30 ? 6 : 3)) % 2 : "") + "|" + (it.st === "fly" ? Math.floor(fr / 2) % 4 : "");
+            key = it.k + "|" + it.st + "|" + (it.st === "fuse" ? Math.floor(it.fuse / (it.fuse > 30 ? 6 : 3)) % 2 : "") + "|" + (it.st === "fly" ? Math.floor(fr / 2) % 4 : "");
             if (key !== cv.key) { cv.key = key; cv.requestPaint(); }
+            i++;
         }
-        const wob = Math.abs(s.ropeW[0]) + Math.abs(s.ropeW[1]) > 0.05;
+        wob = Math.abs(s.ropeW[0]) + Math.abs(s.ropeW[1]) > 0.05;
         upd(ropeBack, wob); upd(ropeFront, wob);
-        const br = s.phase === "break";
-        const tk = Math.round(s.trX[0]) + "," + Math.round(s.trX[1]) + (br && (s.f[0].sit || s.f[1].sit) ? "," + fr : "");
+        br = s.phase === "break";
+        tk = Math.round(s.trX[0]) + "," + Math.round(s.trX[1]) + (br && (s.f[0].sit || s.f[1].sit) ? "," + fr : "");
         if (tk !== trCv.key) { trCv.key = tk; trCv.requestPaint(); }
-        const glow = br && s.rw >= 0 && s.phT < 45, pod = s.phase === "win" && !!s.pod;
+        glow = br && s.rw >= 0 && s.phT < 45; pod = s.phase === "win" && !!s.pod;
         upd(backCv, glow || pod || s.f[0].trail.length > 0 || s.f[1].trail.length > 0);
         upd(frontCv, glow || pod || s.phase === "card");
-        const talk = g.sayT > 0 && Math.floor(fr / 3) % 2 === 0;
+        talk = g.sayT > 0 && Math.floor(fr / 3) % 2 === 0;
         if (talk !== annCv.talk) { annCv.talk = talk; annCv.requestPaint(); }
         upd(canvas, s.parts.length > 0 || s.proj.length > 0 || s.beams.length > 0 || s.rings.length > 0 || s.floats.length > 0 || s.maxBeam > 0);
-        ambFr = fr; gustVis = s.gustT > 0 ? 1 : 0; gustDir = s.gustD || 1;
+        placeFlakes(fr);
+        gv = s.gustT > 0 ? 1 : 0; if (gustVis !== gv) gustVis = gv;
+        gd = s.gustD || 1; if (gustDir !== gd) gustDir = gd;
     }
     function applyCam() {
-        const s = sm;
-        let shx = 0, shy = 0;
-        if (s.shake > 0) { const o = Math.sin(s.frame * 2.7) * s.shake; shx = s.sdx * o + (Math.random() - 0.5) * s.shake * 0.3; shy = s.sdy * o; }
+        var s = sm, shx = 0, shy = 0, o, a, b, live;
+        if (!s || !s.f) return;
+        if (s.shake > 0) { o = Math.sin(s.frame * 2.7) * s.shake; shx = s.sdx * o + (Math.random() - 0.5) * s.shake * 0.3; shy = s.sdy * o; }
         world.scale = s.camZ;
         world.x = Math.round(450 - s.camZ * (s.camX - shx));
         world.y = Math.round(280 - s.camZ * (s.camY - shy));
@@ -1174,9 +1356,11 @@ PanelWindow {
         flashC = s.flash > 0 ? s.flashC : "#ffffff"; if (s.flash <= 0) s.flashC = "#ffffff";
         scanO = s.scan > 0 ? 1 : 0;
         vigO = Math.max(0, Math.min(1, s.vig));
-        const nm = n => (String(n).length > 10 ? String(n).slice(0, 9) + "…" : String(n));
-        jName = nm(s.f[0].who.name) + "  VS  " + nm(s.f[1].who.name);
-        const live = s.phase === "fight" ? (Math.floor(s.frame / 15) % 2 ? "● LIVE" : "○ LIVE") : s.phase === "break" ? tl("ПЕРЕРЫВ", "BREAK") : s.phase === "ko" || s.phase === "win" ? (s.byKO ? "K.O.!" : tl("ПОБЕДА", "VICTORY")) : "SHOWTIME";
+        a = String(s.f[0].who.name); b = String(s.f[1].who.name);
+        if (a.length > 10) a = a.slice(0, 9) + "…";
+        if (b.length > 10) b = b.slice(0, 9) + "…";
+        jName = a + "  VS  " + b;
+        live = s.phase === "fight" ? (Math.floor(s.frame / 15) % 2 ? "● LIVE" : "○ LIVE") : s.phase === "break" ? tl("ПЕРЕРЫВ", "BREAK") : s.phase === "ko" || s.phase === "win" ? (s.byKO ? "K.O.!" : tl("ПОБЕДА", "VICTORY")) : "SHOWTIME";
         jScore = g.scoreTxt + "   " + live;
         jRound = tl("РАУНД ", "ROUND ") + Math.max(1, s.round) + (g.rounds ? "/" + g.rounds : "") + (g.timerTxt ? "  ·  " + g.timerTxt : "");
         gustTxt = g.arenaFx && arenaId === "desert" && s.gustT > 0 ? (s.gustD > 0 ? "▶  ▶  ▶" : "◀  ◀  ◀") : "";
@@ -1185,28 +1369,38 @@ PanelWindow {
     property var snapN: ({})
     property var snapQ: []
     function snapEv(ev, delay) {
+        var n;
         if (!g.snapDir || (g.snapEv !== "all" && ("," + g.snapEv + ",").indexOf("," + ev + ",") < 0)) return;
-        const n = snapN[ev] || 0;
+        n = snapN[ev] || 0;
         if (n >= 3) return;
         snapN[ev] = n + 1;
-        snapQ = snapQ.concat([{ "at": Date.now() + (delay || 100), "path": g.snapDir + "/" + ev + "-" + (n + 1) + ".png" }]);
+        snapQ.push({ "at": Date.now() + (delay || 100), "path": g.snapDir + "/" + ev + "-" + (n + 1) + ".png" });
+    }
+    function grabSnap(path) {
+        if (!stage) return;
+        stage.grabToImage(function (res) { res.saveToFile(path); });
     }
     Timer {
         interval: 25; repeat: true; running: ar.snapQ.length > 0
         onTriggered: {
-            const due = ar.snapQ.filter(q => q.at <= Date.now());
-            if (!due.length) return;
-            ar.snapQ = ar.snapQ.filter(q => q.at > Date.now());
-            for (const q of due) stage.grabToImage(res => res.saveToFile(q.path));
+            var q = ar.snapQ, i = 0, n = q.length, w = 0, now = Date.now(), item;
+            if (!stage) { q.length = 0; return; }
+            while (i < n) {
+                item = q[i++];
+                if (item.at <= now) ar.grabSnap(item.path);
+                else q[w++] = item;
+            }
+            q.length = w;
         }
     }
     function simStep(raw) {
-        const s = sm;
+        var s = sm, dt;
+        if (!s || !g || !g.on) return false;
         if (s.freeze > 0) { s.freeze -= raw; return false; }
-        const dt = s.slow * raw;
+        dt = s.slow * raw;
         if (s.slowT > 0) { s.slowT -= raw; if (s.slowT <= 0) s.slow = 1; }
         step(dt);
-        return true;
+        return !!(sm && g.on);
     }
     Timer {
         id: tick
@@ -1214,17 +1408,24 @@ PanelWindow {
         repeat: true
         property real last: 0
         onTriggered: {
-            const now = Date.now(), frameTime = last ? Math.min(0.1, (now - last) / 1000) : 0.016; last = now;
-            if (!ar.g.on || !ar.sm) { stop(); return; }
+            var now = Date.now(), frameTime = last ? Math.min(0.1, (now - last) / 1000) : 0.016, ft, k;
+            last = now;
+            if (!ar.g || !ar.g.on || !ar.sm) { stop(); return; }
             // vsync-driven, but the sim + scene update is capped at ~60 Hz (high-refresh outputs would otherwise redraw 200x/s)
             ar.paintAcc += frameTime;
             // eco mode: 30 Hz sim + repaint (the sim runs in 30-fps units, so it only gets coarser)
             if (ar.paintAcc < 0.014) return;
             if (ar.g.eco && (++ar.ecoN & 1)) return;      // every second ~60 Hz step
-            const ft = Math.min(0.066, ar.paintAcc); ar.paintAcc = 0;
+            ft = Math.min(0.066, ar.paintAcc); ar.paintAcc = 0;
             ar.perfTick(ft);
-            if (ar.g.turbo > 1) { for (let k = 0; k < ar.g.turbo && ar.sm; k++) ar.simStep(0.5); if (ar.sm) { ar.applyCam(); ar.paintLayers(); } return; }   // test helper
-            if (!ar.simStep(ft * 30)) { ar.applyCam(); return; }
+            if (ar.g.turbo > 1) {
+                k = 0;
+                while (k < ar.g.turbo && ar.sm && ar.g.on) { ar.simStep(0.5); k++; }
+                if (ar.sm && ar.g.on) { ar.applyCam(); ar.paintLayers(); }
+                return;
+            }
+            if (!ar.simStep(ft * 30)) { if (ar.sm) ar.applyCam(); return; }
+            if (!ar.sm || !ar.g.on) return;
             ar.applyCam();
             ar.paintLayers();
         }
@@ -1373,8 +1574,11 @@ PanelWindow {
             onPaint: {
                 const ctx = getContext("2d"); ctx.reset(); const sm = ar.sm; if (!sm) return;
                 const fy = ar.fy;
-                for (const f of sm.f)
-                    for (let i = 0; i < f.trail.length; i++) { ctx.globalAlpha = 0.28 - i * 0.06; canvas.px(ctx, f.coat, f.trail[i].x - 15, fy - f.trail[i].y - 66, 30, 54); }
+                var fi = 0, f, ti;
+                while (fi < 2) {
+                    f = sm.f[fi++]; ti = 0;
+                    while (ti < f.trail.length) { ctx.globalAlpha = 0.28 - ti * 0.06; canvas.px(ctx, f.coat, f.trail[ti].x - 15, fy - f.trail[ti].y - 66, 30, 54); ti++; }
+                }
                 ctx.globalAlpha = 1;
                 if (sm.phase === "win" && sm.pod) canvas.drawPodium(ctx, sm.pod.rise, sm.frame);
                 if (sm.phase === "break" && sm.rw >= 0 && sm.phT < 45) canvas.drawRoundGlow(ctx, sm.f[sm.rw], sm.phT, sm.frame, true);
@@ -1407,8 +1611,10 @@ PanelWindow {
                 smooth: false
                 renderStrategy: Canvas.Threaded
                 onPaint: {
-                    const ctx = getContext("2d"); ctx.reset(); const sm = ar.sm; if (!sm) return;
-                    const it = sm.items.find(q => q.slot === index);
+                    var ctx = getContext("2d"), sm = ar.sm, it = null, j = 0;
+                    if (!sm) return;
+                    ctx.reset();
+                    while (j < sm.items.length) { if (sm.items[j].slot === index) { it = sm.items[j]; break; } j++; }
                     if (it) canvas.drawItem(ctx, it, sm.frame);
                 }
             }
@@ -1439,19 +1645,19 @@ PanelWindow {
             property real fr: 0
             property bool boost: false
             Repeater {
+                id: smokeRep
                 model: 9
                 Rectangle {
                     required property int index
                     color: ar.arenaId === "desert" ? "#e0b060" : (ar.arenaId === "fjord" || ar.arenaId === "terem") ? "#e8f4ff" : ar.arenaId === "dojo" ? "#f4e4c4" : ar.arenaId === "plaza" ? "#ffd0dc" : "#d8d8e0"
                     opacity: 0.07 + (smokeLayer.boost ? 0.06 : 0)
                     width: 90 + (index % 3) * 30; height: 26
-                    x: Math.round(((index * 113 + smokeLayer.fr * (0.6 + (index % 3) * 0.3)) % 1100) - 100)
-                    y: Math.round(ar.fy - 22 + Math.sin(smokeLayer.fr / 9 + index) * 4)
                 }
             }
         }
         // petals, snow or sand: a dozen rectangles moved on the GPU, no extra canvas
         Repeater {
+            id: flakeRep
             model: 12
             Rectangle {
                 required property int index
@@ -1461,8 +1667,6 @@ PanelWindow {
                 opacity: kind === "desert" ? (ar.gustVis > 0 ? 0.75 : 0.22) : 0.8
                 width: kind === "dojo" ? 5 : 3
                 height: kind === "dojo" ? 4 : 3
-                x: ar.ambX(index)
-                y: ar.ambY(index)
             }
         }
         Canvas {
@@ -1771,46 +1975,46 @@ PanelWindow {
                 const ww = width, H = height, fy = ar.fy, pl = ar.pl, pr = ar.pr;
                 const A = ar.cAccent.toString(), A2 = ar.cAccent2.toString(), FACE = ar.cFace.toString(), SUNK = ar.cSunken.toString();
                 const t0 = Date.now();
-                const rope = (yOff, col, front) => {   // (unused here: ropes have their own layers)
-                    for (let x = pl; x < pr + 8; x += 4) {
-                        const t = (x - pl) / (pr - pl);
-                        const w = (sm.ropeW[0] * Math.max(0, 1 - t * 2) + sm.ropeW[1] * Math.max(0, t * 2 - 1)) * Math.sin(sm.frame * 1.3) * Math.sin(Math.PI * t);
-                        px(ctx, col, x, fy - yOff + Math.round(w * (front ? 1 : 0.6)), 4, 4);
-                    }
-                };
-                for (const q of sm.proj) {
+                var qi = 0, q, kk, hh, bi = 0, bm, x0, x1, ri = 0, rg, pi = 0, p, ti = 0, ft;
+                while (qi < sm.proj.length) {
+                    q = sm.proj[qi++];
                     if (q.k === "wave") {
-                        for (let k = 0; k < 3; k++) { const hh = (10 + k * 8) * q.size; ctx.globalAlpha = 1 - k * 0.25; px(ctx, A2, q.x - (q.vx > 0 ? k * 10 : -k * 10), q.y - hh, 4, hh * 2); }
+                        kk = 0;
+                        while (kk < 3) { hh = (10 + kk * 8) * q.size; ctx.globalAlpha = 1 - kk * 0.25; px(ctx, A2, q.x - (q.vx > 0 ? kk * 10 : -kk * 10), q.y - hh, 4, hh * 2); kk++; }
                         ctx.globalAlpha = 1;
                     } else if (q.k === "throw") drawBmp(ctx, q.bmp, q.x, q.y + 20, 1, q.rot, 5);
                     else if (q.k === "flop") drawBmp(ctx, q.bmp, q.x, q.y, 1, Math.PI / 2 + Math.sin(sm.frame) * 0.5, 4);
                     else if (q.k === "mic") drawBmp(ctx, q.bmp, q.x, q.y, 1, 0, 6);
                     else if (q.k === "key") { px(ctx, "#1a1a20", q.x - 9, q.y - 9, 18, 18); ctx.fillStyle = "#ffffff"; ctx.font = "bold 12px \"" + Theme.fontTitle + "\""; ctx.textAlign = "center"; ctx.fillText(q.ch, q.x, q.y + 4); }
                 }
-                for (const bm of sm.beams) {
-                    const x0 = Math.min(bm.x1, bm.x2), x1 = Math.max(bm.x1, bm.x2);
+                while (bi < sm.beams.length) {
+                    bm = sm.beams[bi++];
+                    x0 = Math.min(bm.x1, bm.x2); x1 = Math.max(bm.x1, bm.x2);
                     ctx.globalAlpha = bm.life / 8;
                     px(ctx, "#e04848", x0, bm.y - bm.w / 2, x1 - x0, bm.w); px(ctx, "#ffffff", x0, bm.y - bm.w / 6, x1 - x0, bm.w / 3);
                     ctx.globalAlpha = 1;
                 }
                 if (sm.maxBeam > 0) { ctx.globalAlpha = sm.maxBeam / 18; px(ctx, "#ff4f6d", 0, fy - 120, ww, 60); px(ctx, "#ffffff", 0, fy - 104, ww, 28); ctx.globalAlpha = 1; }
-                for (const r of sm.rings) {
-                    ctx.globalAlpha = Math.min(1, r.life / 14); ctx.strokeStyle = r.c || "#ffffff"; ctx.lineWidth = 4;
+                while (ri < sm.rings.length) {
+                    rg = sm.rings[ri++];
+                    ctx.globalAlpha = Math.min(1, rg.life / 14); ctx.strokeStyle = rg.c || "#ffffff"; ctx.lineWidth = 4;
                     ctx.beginPath();
-                    if (r.round) ctx.ellipse(r.x - r.r, r.y - r.r, r.r * 2, r.r * 2); else ctx.ellipse(r.x - r.r, r.y - r.r / 3, r.r * 2, r.r / 1.5);
+                    if (rg.round) ctx.ellipse(rg.x - rg.r, rg.y - rg.r, rg.r * 2, rg.r * 2); else ctx.ellipse(rg.x - rg.r, rg.y - rg.r / 3, rg.r * 2, rg.r / 1.5);
                     ctx.stroke(); ctx.globalAlpha = 1;
                 }
-                for (const p of sm.parts) {
+                while (pi < sm.parts.length) {
+                    p = sm.parts[pi++];
                     if (p.bmp) { drawBmp(ctx, p.bmp, p.x, p.y, 1, p.rot, 3); continue; }
                     ctx.globalAlpha = Math.min(1, p.life / 10); px(ctx, p.c, p.x, p.y, p.s, p.s);
                 }
                 ctx.globalAlpha = 1;
-                for (const t of sm.floats) {
-                    ctx.font = "bold " + (t.big ? 22 : 13) + "px \"" + Theme.fontTitle + "\"";
+                while (ti < sm.floats.length) {
+                    ft = sm.floats[ti++];
+                    ctx.font = "bold " + (ft.big ? 22 : 13) + "px \"" + Theme.fontTitle + "\"";
                     ctx.textAlign = "center";
-                    ctx.globalAlpha = Math.min(1, t.life / 10);
-                    ctx.fillStyle = dk; ctx.fillText(t.t, t.x + 2, t.y + 2);
-                    ctx.fillStyle = t.c; ctx.fillText(t.t, t.x, t.y);
+                    ctx.globalAlpha = Math.min(1, ft.life / 10);
+                    ctx.fillStyle = dk; ctx.fillText(ft.t, ft.x + 2, ft.y + 2);
+                    ctx.fillStyle = ft.c; ctx.fillText(ft.t, ft.x, ft.y);
                 }
                 ctx.globalAlpha = 1;
                 ctx.globalAlpha = 1;
