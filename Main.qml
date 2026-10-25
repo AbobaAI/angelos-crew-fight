@@ -8,6 +8,7 @@ import Quickshell.Wayland
 import qs.config
 import qs.services
 import qs.widgets
+import "."
 
 // Crew Fight: two people from the Discord call box in a pixel ring in the middle of the focused
 // screen. Fighters come from AngelOS's own Discord crew data (services/DiscordVoice: stock Discord
@@ -481,6 +482,20 @@ Item {
         picking = true;
         return pickDemo ? "picker (demo: fewer than 2 in call)" : "picker";
     }
+    function openFromDesk() {
+        if (!live || !Desk.a || !Desk.b || Desk.a.id === Desk.b.id)
+            return;
+        openPicker();
+        pickDemo = false;
+        first = Desk.a;
+        second = Desk.b;
+        wpA = "random";
+        wpB = "random";
+    }
+    Connections {
+        target: Desk
+        function onFightAsked() { root.openFromDesk(); }
+    }
 
     IpcHandler {
         target: "crewfight"
@@ -536,6 +551,22 @@ Item {
         function snap(ev: string, dir: string): string { root.snapEv = ev; root.snapDir = dir; return "snap " + ev + " -> " + dir; }
         function turbo(n: string): string { root.turbo = Math.max(1, Math.min(60, parseInt(n) || 1)); return "turbo " + root.turbo; }
         // test helper (not in the README): open the picker on demo fighters and save the card
+        function desk(v: string): string {
+            if (v === "fill") {
+                Desk.expanded = true;
+                Desk.put(0, root.fakes[0]);
+                Desk.put(1, root.fakes[1]);
+                return "desk filled";
+            }
+            if (v === "clear") {
+                Desk.clear(0);
+                Desk.clear(1);
+                Desk.expanded = false;
+                return "desk cleared";
+            }
+            Desk.expanded = v !== "off" && v !== "0";
+            return Desk.expanded ? "desk open" : "desk closed";
+        }
         function pickShot(path: string, hall: string): string {
             const r = root.openPicker();
             root.pickDemo = true;

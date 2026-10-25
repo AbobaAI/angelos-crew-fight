@@ -26,6 +26,9 @@
   "main": "Main.qml",
   "launcher": "Launcher.qml",
   "settings": "Settings.qml",
+  "desktopTitle": "crew",
+  "desktopWidget": "DesktopWidget.qml",
+  "realms": ["heaven", "hell"],
   "menu": [
     {
       "label": "Драка человечков / Crew Fight",
