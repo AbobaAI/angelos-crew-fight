@@ -6,7 +6,7 @@ import qs.services
 import qs.widgets
 import "."
 
-// Desktop widget. The host draws the outer frame. Collapsed it is a boxing-glove
+// Desktop widget. The host draws the outer frame. Collapsed it is a fist
 // button; a click grows a small arena with two drop cells.
 Item {
     id: root
@@ -116,19 +116,26 @@ Item {
     Column {
         width: root.openW
         spacing: root.gap
+        // The window shrinks to the icon. Keep the fist in that square, and
+        // in the middle of the arena once the window has grown.
+        x: (root.implicitWidth - width) / 2
 
         Item {
             id: knob
-            implicitWidth: Skin.px(26)
-            implicitHeight: Skin.px(26)
+            width: parent.width
+            implicitWidth: Skin.macWidgets ? Skin.px(26) : fistIcon.width + Theme.u * 2
+            implicitHeight: Skin.macWidgets ? Skin.px(26) : fistIcon.height + Theme.u * 2
+            height: implicitHeight
 
             PxIcon {
+                id: fistIcon
                 anchors.centerIn: parent
                 visible: !Skin.macWidgets
                 pixel: Theme.u
-                ink: "#f4e4c4"
+                ink: root.ink
                 fill: "#e85a4a"
-                bitmap: ["..####...", ".#oooo#..", "#oooooo#.", "#o#oo#o#.", "#oooooo#.", ".#oooo#..", "..####...", ".##ww##.."]
+                fill3: root.gold
+                bitmap: ["...................y.................", "...................y.................", "...........y......y.......y..........", "............y.....y......y...........", "............y......y.....y...........", ".............y.....y....y............", "......y......y....y.....y......y.....", ".......y......y...y....y......y......", "........y....................y.......", ".........y........####......y........", "............####.#oooo#.###..........", ".y.........#oooo#oooooo#ooo#.......y.", "..yy....####oooo#oooooo#oooo#....yy..", "....y..#ooo#oooooooooooooooo#..yy....", ".......#oooooooooooooooooooo#........", ".......#oooooooooooooo#ooooo#........", ".......#oooooooo#ooooo#ooooo#........", ".......#ooo#oooo#ooooo#ooooo#........", ".yy....#ooo#oooo#ooooo#ooooo#...yy..y", "y..yy..#ooo#oooo#ooooo#ooooo##....yy.", ".......#ooo#oooo#ooooo#ooooo##.......", ".......#ooo#oooo#ooooo#ooooo#o#......", "........###.#ooo#ooooo#ooooo#o#......", ".............###.#oooo##ooo#oo#......", ".....y............####oo###oooo#.....", "...yy.............#ooo#ooooooo##..y..", "..y........y.......#ooo#ooooo#.....y.", "..........y....y....#########.......y", ".........y.....y.....................", "........y.....y...y..........y.......", ".......y......y...y....y......y......", "......y......y.....y....y......y.....", ".............y.....y....y............", "............y.....y......y...........", "............y.....y......y...........", "...........y.......y......y..........", "...................y................."]
             }
             MacIcon {
                 anchors.centerIn: parent
